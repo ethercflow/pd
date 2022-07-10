@@ -56,3 +56,5 @@ require (
 	google.golang.org/grpc v1.26.0
 	gotest.tools/gotestsum v1.7.0
 )
+
+replace github.com/pingcap/kvproto v0.0.0-20220510035547-0e2f26c0a46a => github.com/Connor1996/kvproto v0.0.0-20220623054324-95735359d10e

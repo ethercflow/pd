@@ -672,15 +672,15 @@ func (oc *OperatorController) SendScheduleCommand(region *core.RegionInfo, step 
 			// The newly added peer is pending.
 			return
 		}
-		cmd = addNode(st.PeerID, st.ToStore)
+		cmd = addNode(st.PeerID, st.ToStore, st.IsWitness)
 	case operator.AddLearner:
 		if region.GetStorePeer(st.ToStore) != nil {
 			// The newly added peer is pending.
 			return
 		}
-		cmd = addLearnerNode(st.PeerID, st.ToStore)
+		cmd = addLearnerNode(st.PeerID, st.ToStore, st.IsWitness)
 	case operator.PromoteLearner:
-		cmd = addNode(st.PeerID, st.ToStore)
+		cmd = addNode(st.PeerID, st.ToStore, st.IsWitness)
 	case operator.RemovePeer:
 		cmd = &pdpb.RegionHeartbeatResponse{
 			ChangePeer: &pdpb.ChangePeer{
@@ -719,27 +719,29 @@ func (oc *OperatorController) SendScheduleCommand(region *core.RegionInfo, step 
 	oc.hbStreams.SendMsg(region, cmd)
 }
 
-func addNode(id, storeID uint64) *pdpb.RegionHeartbeatResponse {
+func addNode(id, storeID uint64, isWitness bool) *pdpb.RegionHeartbeatResponse {
 	return &pdpb.RegionHeartbeatResponse{
 		ChangePeer: &pdpb.ChangePeer{
 			ChangeType: eraftpb.ConfChangeType_AddNode,
 			Peer: &metapb.Peer{
-				Id:      id,
-				StoreId: storeID,
-				Role:    metapb.PeerRole_Voter,
+				Id:        id,
+				StoreId:   storeID,
+				Role:      metapb.PeerRole_Voter,
+				IsWitness: isWitness,
 			},
 		},
 	}
 }
 
-func addLearnerNode(id, storeID uint64) *pdpb.RegionHeartbeatResponse {
+func addLearnerNode(id, storeID uint64, isWitness bool) *pdpb.RegionHeartbeatResponse {
 	return &pdpb.RegionHeartbeatResponse{
 		ChangePeer: &pdpb.ChangePeer{
 			ChangeType: eraftpb.ConfChangeType_AddLearnerNode,
 			Peer: &metapb.Peer{
-				Id:      id,
-				StoreId: storeID,
-				Role:    metapb.PeerRole_Learner,
+				Id:        id,
+				StoreId:   storeID,
+				Role:      metapb.PeerRole_Learner,
+				IsWitness: isWitness,
 			},
 		},
 	}

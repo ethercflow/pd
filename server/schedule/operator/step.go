@@ -119,6 +119,7 @@ func (tl TransferLeader) Timeout(start time.Time, regionSize int64) bool {
 type AddPeer struct {
 	ToStore, PeerID uint64
 	IsLightWeight   bool
+	IsWitness       bool
 }
 
 // ConfVerChanged returns the delta value for version increased by this step.
@@ -177,6 +178,7 @@ func (ap AddPeer) Timeout(start time.Time, regionSize int64) bool {
 type AddLearner struct {
 	ToStore, PeerID uint64
 	IsLightWeight   bool
+	IsWitness       bool
 }
 
 // ConfVerChanged returns the delta value for version increased by this step.
@@ -240,6 +242,7 @@ func (al AddLearner) Timeout(start time.Time, regionSize int64) bool {
 // PromoteLearner is an OpStep that promotes a region learner peer to normal voter.
 type PromoteLearner struct {
 	ToStore, PeerID uint64
+	IsWitness       bool
 }
 
 // ConfVerChanged returns the delta value for version increased by this step.
