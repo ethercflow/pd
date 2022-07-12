@@ -285,6 +285,7 @@ func (suite *ruleCheckerTestSuite) TestFixRuleWitness() {
 	suite.NotNil(op)
 	suite.Equal("add-rule-peer", op.Desc())
 	suite.Equal(uint64(3), op.Step(0).(operator.AddLearner).ToStore)
+	suite.True(op.Step(0).(operator.AddLearner).IsWitness)
 }
 
 func (suite *ruleCheckerTestSuite) TestBetterReplacement() {
