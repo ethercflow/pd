@@ -239,6 +239,25 @@ func (b *Builder) DemoteVoter(storeID uint64) *Builder {
 	return b
 }
 
+func (b *Builder) BecomeWitness(storeID uint64) *Builder {
+	if b.err != nil {
+		return b
+	}
+	if peer, ok := b.targetPeers[storeID]; !ok {
+		b.err = errors.Errorf("cannot become witness peer %d: not found", storeID)
+	} else if core.IsWitness(peer) {
+		b.err = errors.Errorf("cannot become witness peer %d: is already witness", storeID)
+	} else {
+		b.targetPeers.Set(&metapb.Peer{
+			Id:        peer.GetId(),
+			StoreId:   peer.GetStoreId(),
+			Role:      metapb.PeerRole_Voter,
+			IsWitness: true,
+		})
+	}
+	return b
+}
+
 // NonWitness records a remove witness attr operation in Builder.
 func (b *Builder) NonWitness(storeID uint64) *Builder {
 	if b.err != nil {

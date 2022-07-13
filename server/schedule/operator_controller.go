@@ -22,8 +22,6 @@ import (
 	"time"
 
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/kvproto/pkg/eraftpb"
-	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
 	"github.com/pingcap/log"
 	"github.com/tikv/pd/pkg/cache"
@@ -654,70 +652,11 @@ func (oc *OperatorController) SendScheduleCommand(region *core.RegionInfo, step 
 		zap.Stringer("step", step),
 		zap.String("source", source))
 
-	var cmd *pdpb.RegionHeartbeatResponse
-	switch st := step.(type) {
-	case operator.TransferLeader:
-		peers := make([]*metapb.Peer, 0, len(st.ToStores))
-		for _, storeID := range st.ToStores {
-			peers = append(peers, region.GetStorePeer(storeID))
-		}
-		cmd = &pdpb.RegionHeartbeatResponse{
-			TransferLeader: &pdpb.TransferLeader{
-				Peer:  region.GetStorePeer(st.ToStore),
-				Peers: peers,
-			},
-		}
-	case operator.AddPeer:
-		if region.GetStorePeer(st.ToStore) != nil {
-			// The newly added peer is pending.
-			return
-		}
-		cmd = addNode(st.PeerID, st.ToStore, st.IsWitness)
-	case operator.AddLearner:
-		if region.GetStorePeer(st.ToStore) != nil {
-			// The newly added peer is pending.
-			return
-		}
-		cmd = addLearnerNode(st.PeerID, st.ToStore, st.IsWitness)
-	case operator.PromoteLearner:
-		cmd = addNode(st.PeerID, st.ToStore, st.IsWitness)
-	case operator.RemovePeer:
-		cmd = &pdpb.RegionHeartbeatResponse{
-			ChangePeer: &pdpb.ChangePeer{
-				ChangeType: eraftpb.ConfChangeType_RemoveNode,
-				Peer:       region.GetStorePeer(st.FromStore),
-			},
-		}
-	case operator.BecomeNonWitness:
-		cmd = becomeNonWitnessNode(st.PeerID, st.StoreID)
-	case operator.MergeRegion:
-		if st.IsPassive {
-			return
-		}
-		cmd = &pdpb.RegionHeartbeatResponse{
-			Merge: &pdpb.Merge{
-				Target: st.ToRegion,
-			},
-		}
-	case operator.SplitRegion:
-		cmd = &pdpb.RegionHeartbeatResponse{
-			SplitRegion: &pdpb.SplitRegion{
-				Policy: st.Policy,
-				Keys:   st.SplitKeys,
-			},
-		}
-	case operator.ChangePeerV2Enter:
-		cmd = &pdpb.RegionHeartbeatResponse{
-			ChangePeerV2: st.GetRequest(),
-		}
-	case operator.ChangePeerV2Leave:
-		cmd = &pdpb.RegionHeartbeatResponse{
-			ChangePeerV2: &pdpb.ChangePeerV2{},
-		}
-	default:
-		log.Error("unknown operator step", zap.Reflect("step", step), errs.ZapError(errs.ErrUnknownOperatorStep))
+	cmd := step.GetCmd(region)
+	if cmd == nil {
 		return
 	}
+
 	oc.hbStreams.SendMsg(region, cmd)
 }
 
@@ -744,20 +683,6 @@ func addLearnerNode(id, storeID uint64, isWitness bool) *pdpb.RegionHeartbeatRes
 				StoreId:   storeID,
 				Role:      metapb.PeerRole_Learner,
 				IsWitness: isWitness,
-			},
-		},
-	}
-}
-
-func becomeNonWitnessNode(id, storeID uint64) *pdpb.RegionHeartbeatResponse {
-	return &pdpb.RegionHeartbeatResponse{
-		ChangePeer: &pdpb.ChangePeer{
-			ChangeType: eraftpb.ConfChangeType_AddLearnerNode, // TODO: add a new type: ConfChangeType_BecomeNonWitness?
-			Peer: &metapb.Peer{
-				Id:        id,
-				StoreId:   storeID,
-				Role:      metapb.PeerRole_Learner,
-				IsWitness: false,
 			},
 		},
 	}
