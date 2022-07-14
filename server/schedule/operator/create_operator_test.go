@@ -1078,3 +1078,53 @@ func (suite *createOperatorTestSuite) TestMoveRegionWithoutJointConsensus() {
 		}
 	}
 }
+
+func (suite *createOperatorTestSuite) TestCreateNoneWitnessOperator() {
+	type testCase struct {
+		name            string
+		originPeers     []*metapb.Peer // first is leader
+		targetPeerRoles map[uint64]placement.PeerRoleType
+		steps           []OpStep
+	}
+	testCases := []testCase{
+		{
+			name: "move region partially with incoming voter, demote existed voter",
+			originPeers: []*metapb.Peer{
+				{Id: 1, StoreId: 1, Role: metapb.PeerRole_Voter},
+				{Id: 2, StoreId: 2, Role: metapb.PeerRole_Voter},
+				{Id: 3, StoreId: 3, Role: metapb.PeerRole_Voter, IsWitness: true},
+			},
+			targetPeerRoles: map[uint64]placement.PeerRoleType{
+				1: placement.Leader,
+				2: placement.Voter,
+				3: placement.Learner,
+			},
+			steps: []OpStep{
+				RemovePeer{FromStore: 3},
+				AddLearner{ToStore: 3},
+				BecomeNonWitness{StoreID: 3},
+			},
+		},
+	}
+	suite.cluster.SetClusterVersion(versioninfo.MinSupportedVersion(versioninfo.Version4_0))
+	for _, testCase := range testCases {
+		suite.T().Log(testCase.name)
+		region := core.NewRegionInfo(&metapb.Region{Id: 1, Peers: testCase.originPeers}, testCase.originPeers[0])
+		op, err := CreateNonWitnessVoterOperator("test", suite.cluster, region, testCase.originPeers[2])
+		suite.NotNil(op)
+		suite.Nil(err)
+		suite.Len(testCase.steps, op.Len())
+		for i := 0; i < op.Len(); i++ {
+			switch step := op.Step(i).(type) {
+			case RemovePeer:
+				suite.Equal(testCase.steps[i].(RemovePeer).FromStore, step.FromStore)
+			case AddLearner:
+				suite.Equal(testCase.steps[i].(AddLearner).ToStore, step.ToStore)
+			case BecomeNonWitness:
+				suite.Equal(testCase.steps[i].(BecomeNonWitness).StoreID, step.StoreID)
+			default:
+				suite.T().Errorf("unexpected type: %s", step.String())
+			}
+		}
+	}
+}

@@ -287,6 +287,40 @@ func (suite *ruleCheckerTestSuite) TestFixRuleWitness() {
 	suite.Equal(uint64(3), op.Step(0).(operator.AddLearner).ToStore)
 	suite.True(op.Step(0).(operator.AddLearner).IsWitness)
 }
+func (suite *ruleCheckerTestSuite) TestBecomeNonWitness() {
+	/*
+		suite.cluster.AddLabelsStore(1, 1, map[string]string{"A": "follower"})
+		suite.cluster.AddLabelsStore(2, 1, map[string]string{"B": "leader"})
+		suite.cluster.AddLabelsStore(3, 1, map[string]string{"C": "voter"})
+		originPeers := []*metapb.Peer{
+			{Id: 1, StoreId: 1, Role: metapb.PeerRole_Voter},
+			{Id: 2, StoreId: 2, Role: metapb.PeerRole_Voter},
+			{Id: 3, StoreId: 3, Role: metapb.PeerRole_Voter, IsWitness: true},
+		}
+		region := core.NewRegionInfo(&metapb.Region{
+			Id:       1,
+			StartKey: []byte("a"),
+			EndKey:   []byte("z"),
+			Peers:    originPeers,
+		}, originPeers[0])
+
+		suite.ruleManager.SetRule(&placement.Rule{
+			GroupID:   "pd",
+			ID:        "r1",
+			Index:     100,
+			Override:  true,
+			Role:      placement.Voter,
+			Count:     1,
+			IsWitness: false,
+			LabelConstraints: []placement.LabelConstraint{
+				{Key: "C", Op: "in", Values: []string{"voter"}},
+			},
+		})
+
+		op := suite.rc.Check(suite.cluster.GetRegion(1))
+		suite.NotNil(op)
+	*/
+}
 
 func (suite *ruleCheckerTestSuite) TestBetterReplacement() {
 	suite.cluster.AddLabelsStore(1, 1, map[string]string{"host": "host1"})
