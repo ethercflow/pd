@@ -688,6 +688,8 @@ func (oc *OperatorController) SendScheduleCommand(region *core.RegionInfo, step 
 				Peer:       region.GetStorePeer(st.FromStore),
 			},
 		}
+	case operator.BecomeNonWitness:
+		cmd = becomeNonWitnessNode(st.PeerID, st.StoreID)
 	case operator.MergeRegion:
 		if st.IsPassive {
 			return
@@ -742,6 +744,20 @@ func addLearnerNode(id, storeID uint64, isWitness bool) *pdpb.RegionHeartbeatRes
 				StoreId:   storeID,
 				Role:      metapb.PeerRole_Learner,
 				IsWitness: isWitness,
+			},
+		},
+	}
+}
+
+func becomeNonWitnessNode(id, storeID uint64) *pdpb.RegionHeartbeatResponse {
+	return &pdpb.RegionHeartbeatResponse{
+		ChangePeer: &pdpb.ChangePeer{
+			ChangeType: eraftpb.ConfChangeType_AddLearnerNode, // TODO: add a new type: ConfChangeType_BecomeNonWitness?
+			Peer: &metapb.Peer{
+				Id:        id,
+				StoreId:   storeID,
+				Role:      metapb.PeerRole_Learner,
+				IsWitness: false,
 			},
 		},
 	}
