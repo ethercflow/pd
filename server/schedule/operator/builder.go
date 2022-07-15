@@ -210,9 +210,10 @@ func (b *Builder) PromoteLearner(storeID uint64) *Builder {
 		b.err = errors.Errorf("cannot promote peer %d: unhealthy", storeID)
 	} else {
 		b.targetPeers.Set(&metapb.Peer{
-			Id:      peer.GetId(),
-			StoreId: peer.GetStoreId(),
-			Role:    metapb.PeerRole_Voter,
+			Id:        peer.GetId(),
+			StoreId:   peer.GetStoreId(),
+			Role:      metapb.PeerRole_Voter,
+			IsWitness: peer.GetIsWitness(),
 		})
 	}
 	return b
@@ -436,9 +437,10 @@ func (b *Builder) prepareBuild() (string, error) {
 		// modify it to the peer id of the origin.
 		if o.GetId() != n.GetId() {
 			n = &metapb.Peer{
-				Id:      o.GetId(),
-				StoreId: o.GetStoreId(),
-				Role:    n.GetRole(),
+				Id:        o.GetId(),
+				StoreId:   o.GetStoreId(),
+				Role:      n.GetRole(),
+				IsWitness: n.GetIsWitness(),
 			}
 		}
 
@@ -468,9 +470,10 @@ func (b *Builder) prepareBuild() (string, error) {
 					return "", err
 				}
 				n = &metapb.Peer{
-					Id:      id,
-					StoreId: n.GetStoreId(),
-					Role:    n.GetRole(),
+					Id:        id,
+					StoreId:   n.GetStoreId(),
+					Role:      n.GetRole(),
+					IsWitness: n.GetIsWitness(),
 				}
 			}
 			// It is a pair with `b.toRemove.Set(o)` when `o != nil`.
@@ -537,9 +540,10 @@ func (b *Builder) buildStepsWithJointConsensus(kind OpKind) (OpKind, error) {
 		peer := b.toAdd[add]
 		if !core.IsLearner(peer) {
 			b.execAddPeer(&metapb.Peer{
-				Id:      peer.GetId(),
-				StoreId: peer.GetStoreId(),
-				Role:    metapb.PeerRole_Learner,
+				Id:        peer.GetId(),
+				StoreId:   peer.GetStoreId(),
+				Role:      metapb.PeerRole_Learner,
+				IsWitness: peer.GetIsWitness(),
 			})
 			b.toPromote.Set(peer)
 		} else {
@@ -558,9 +562,10 @@ func (b *Builder) buildStepsWithJointConsensus(kind OpKind) (OpKind, error) {
 		peer := b.toRemove[remove]
 		if !core.IsLearner(peer) {
 			b.toDemote.Set(&metapb.Peer{
-				Id:      peer.GetId(),
-				StoreId: peer.GetStoreId(),
-				Role:    metapb.PeerRole_Learner,
+				Id:        peer.GetId(),
+				StoreId:   peer.GetStoreId(),
+				Role:      metapb.PeerRole_Learner,
+				IsWitness: peer.GetIsWitness(),
 			})
 		}
 	}
@@ -707,19 +712,19 @@ func (b *Builder) execTransferLeader(targetStoreID uint64, targetStoreIDs []uint
 }
 
 func (b *Builder) execPromoteLearner(peer *metapb.Peer) {
-	b.steps = append(b.steps, PromoteLearner{ToStore: peer.GetStoreId(), PeerID: peer.GetId()})
+	b.steps = append(b.steps, PromoteLearner{ToStore: peer.GetStoreId(), PeerID: peer.GetId(), IsWitness: peer.GetIsWitness()})
 	b.currentPeers.Set(peer)
 	delete(b.toPromote, peer.GetStoreId())
 }
 
 func (b *Builder) execAddPeer(peer *metapb.Peer) {
 	if b.lightWeight {
-		b.steps = append(b.steps, AddLearner{ToStore: peer.GetStoreId(), PeerID: peer.GetId(), IsLightWeight: b.lightWeight})
+		b.steps = append(b.steps, AddLearner{ToStore: peer.GetStoreId(), PeerID: peer.GetId(), IsLightWeight: b.lightWeight, IsWitness: peer.GetIsWitness()})
 	} else {
-		b.steps = append(b.steps, AddLearner{ToStore: peer.GetStoreId(), PeerID: peer.GetId()})
+		b.steps = append(b.steps, AddLearner{ToStore: peer.GetStoreId(), PeerID: peer.GetId(), IsWitness: peer.GetIsWitness()})
 	}
 	if !core.IsLearner(peer) {
-		b.steps = append(b.steps, PromoteLearner{ToStore: peer.GetStoreId(), PeerID: peer.GetId()})
+		b.steps = append(b.steps, PromoteLearner{ToStore: peer.GetStoreId(), PeerID: peer.GetId(), IsWitness: peer.GetIsWitness()})
 	}
 	b.currentPeers.Set(peer)
 	b.peerAddStep[peer.GetStoreId()] = len(b.steps)

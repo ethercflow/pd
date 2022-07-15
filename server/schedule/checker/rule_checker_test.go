@@ -263,6 +263,31 @@ func (suite *ruleCheckerTestSuite) TestFixRoleLeaderIssue3130() {
 	suite.Equal(uint64(1), op.Step(0).(operator.RemovePeer).FromStore)
 }
 
+func (suite *ruleCheckerTestSuite) TestFixRuleWitness() {
+	suite.cluster.AddLabelsStore(1, 1, map[string]string{"A": "follower"})
+	suite.cluster.AddLabelsStore(2, 1, map[string]string{"B": "leader"})
+	suite.cluster.AddLabelsStore(3, 1, map[string]string{"C": "voter"})
+	suite.cluster.AddLeaderRegion(1, 1, 2)
+
+	suite.ruleManager.SetRule(&placement.Rule{
+		GroupID:   "pd",
+		ID:        "r1",
+		Index:     100,
+		Override:  true,
+		Role:      placement.Voter,
+		Count:     1,
+		IsWitness: true,
+		LabelConstraints: []placement.LabelConstraint{
+			{Key: "C", Op: "in", Values: []string{"voter"}},
+		},
+	})
+	op := suite.rc.Check(suite.cluster.GetRegion(1))
+	suite.NotNil(op)
+	suite.Equal("add-rule-peer", op.Desc())
+	suite.Equal(uint64(3), op.Step(0).(operator.AddLearner).ToStore)
+	suite.True(op.Step(0).(operator.AddLearner).IsWitness)
+}
+
 func (suite *ruleCheckerTestSuite) TestBetterReplacement() {
 	suite.cluster.AddLabelsStore(1, 1, map[string]string{"host": "host1"})
 	suite.cluster.AddLabelsStore(2, 1, map[string]string{"host": "host1"})

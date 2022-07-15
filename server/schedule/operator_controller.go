@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/kvproto/pkg/eraftpb"
+	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
 	"github.com/pingcap/log"
 	"github.com/tikv/pd/pkg/cache"
@@ -658,6 +660,34 @@ func (oc *OperatorController) SendScheduleCommand(region *core.RegionInfo, step 
 	}
 
 	oc.hbStreams.SendMsg(region, cmd)
+}
+
+func addNode(id, storeID uint64, isWitness bool) *pdpb.RegionHeartbeatResponse {
+	return &pdpb.RegionHeartbeatResponse{
+		ChangePeer: &pdpb.ChangePeer{
+			ChangeType: eraftpb.ConfChangeType_AddNode,
+			Peer: &metapb.Peer{
+				Id:        id,
+				StoreId:   storeID,
+				Role:      metapb.PeerRole_Voter,
+				IsWitness: isWitness,
+			},
+		},
+	}
+}
+
+func addLearnerNode(id, storeID uint64, isWitness bool) *pdpb.RegionHeartbeatResponse {
+	return &pdpb.RegionHeartbeatResponse{
+		ChangePeer: &pdpb.ChangePeer{
+			ChangeType: eraftpb.ConfChangeType_AddLearnerNode,
+			Peer: &metapb.Peer{
+				Id:        id,
+				StoreId:   storeID,
+				Role:      metapb.PeerRole_Learner,
+				IsWitness: isWitness,
+			},
+		},
+	}
 }
 
 func (oc *OperatorController) pushFastOperator(op *operator.Operator) {
