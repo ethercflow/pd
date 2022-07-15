@@ -328,7 +328,7 @@ func (bn BecomeNonWitness) Timeout(start time.Time, regionSize int64) bool {
 
 // GetCmd returns the schedule command for heartbeat response.
 func (bn BecomeNonWitness) GetCmd(region *core.RegionInfo) *pdpb.RegionHeartbeatResponse {
-	return addLearnerNode(bn.StoreID, bw.PeerID, false)
+	return addLearnerNode(bn.StoreID, bn.PeerID, false)
 }
 
 // AddLearner is an OpStep that adds a region learner peer.

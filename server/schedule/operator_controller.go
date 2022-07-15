@@ -23,6 +23,8 @@ import (
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/kvproto/pkg/pdpb"
+        "github.com/pingcap/kvproto/pkg/metapb"
+        "github.com/pingcap/kvproto/pkg/eraftpb"
 	"github.com/pingcap/log"
 	"github.com/tikv/pd/pkg/cache"
 	"github.com/tikv/pd/pkg/errs"
