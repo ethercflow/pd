@@ -217,12 +217,11 @@ type BecomeWitness struct {
 
 // ConfVerChanged returns the delta value for version increased by this step.
 func (bw BecomeWitness) ConfVerChanged(region *core.RegionInfo) uint64 {
-	peer := region.GetStorePeer(bw.StoreID)
-	return typeutil.BoolToUint64(peer.GetId() == bw.PeerID)
+	return 0
 }
 
 func (bw BecomeWitness) String() string {
-	return fmt.Sprintf("change peer %v on store %v to witness", bw.PeerID, bw.StoreID)
+	return fmt.Sprintf("convert peer %v on store %v to witness", bw.PeerID, bw.StoreID)
 }
 
 // IsFinish checks if current step is finished.
@@ -282,12 +281,11 @@ type BecomeNonWitness struct {
 
 // ConfVerChanged returns the delta value for version increased by this step.
 func (bn BecomeNonWitness) ConfVerChanged(region *core.RegionInfo) uint64 {
-	peer := region.GetStorePeer(bn.StoreID)
-	return typeutil.BoolToUint64(peer.GetId() == bn.PeerID)
+	return 0
 }
 
 func (bn BecomeNonWitness) String() string {
-	return fmt.Sprintf("change peer %v on store %v to non-witness", bn.PeerID, bn.StoreID)
+	return fmt.Sprintf("convert peer %v on store %v to non-witness", bn.PeerID, bn.StoreID)
 }
 
 // IsFinish checks if current step is finished.
