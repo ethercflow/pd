@@ -266,9 +266,13 @@ func (bw BecomeWitness) Timeout(regionSize int64) time.Duration {
 // GetCmd returns the schedule command for heartbeat response.
 func (bw BecomeWitness) GetCmd(region *core.RegionInfo, useConfChangeV2 bool) *pdpb.RegionHeartbeatResponse {
 	if core.IsLearner(region.GetStorePeer(bw.StoreID)) {
-		return createResponse(addLearnerNode(bw.PeerID, bw.StoreID, true), useConfChangeV2)
+		return &pdpb.RegionHeartbeatResponse{
+			ConvertWitness: convertWitness(bw.PeerID, bw.StoreID, metapb.PeerRole_Learner, true),
+		}
 	}
-	return createResponse(addNode(bw.PeerID, bw.StoreID, true), useConfChangeV2)
+	return &pdpb.RegionHeartbeatResponse{
+		ConvertWitness: convertWitness(bw.PeerID, bw.StoreID, metapb.PeerRole_Voter, true),
+	}
 }
 
 // BecomeNonWitness is an OpStep that makes a peer become a non-witness.
@@ -325,7 +329,9 @@ func (bn BecomeNonWitness) Timeout(regionSize int64) time.Duration {
 
 // GetCmd returns the schedule command for heartbeat response.
 func (bn BecomeNonWitness) GetCmd(region *core.RegionInfo, useConfChangeV2 bool) *pdpb.RegionHeartbeatResponse {
-	return createResponse(addLearnerNode(bn.PeerID, bn.StoreID, false), useConfChangeV2)
+	return &pdpb.RegionHeartbeatResponse{
+		ConvertWitness: convertWitness(bn.PeerID, bn.StoreID, metapb.PeerRole_Learner, false),
+	}
 }
 
 // AddLearner is an OpStep that adds a region learner peer.
@@ -1015,5 +1021,16 @@ func createResponse(change *pdpb.ChangePeer, useConfChangeV2 bool) *pdpb.RegionH
 	}
 	return &pdpb.RegionHeartbeatResponse{
 		ChangePeer: change,
+	}
+}
+
+func convertWitness(id, storeID uint64, role metapb.PeerRole, isWitness bool) *pdpb.ConvertWitness {
+	return &pdpb.ConvertWitness{
+		Peer: &metapb.Peer{
+			Id:        id,
+			StoreId:   storeID,
+			Role:      role,
+			IsWitness: isWitness,
+		},
 	}
 }
