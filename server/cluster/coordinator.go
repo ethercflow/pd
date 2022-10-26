@@ -941,6 +941,10 @@ func (s *scheduleController) GetDelayUntil() int64 {
 	return 0
 }
 
+func (s *scheduleController) UpdateConfig(args []string) error {
+	return s.Scheduler.UpdateConfig(args)
+}
+
 func (c *coordinator) getPausedSchedulerDelayAt(name string) (int64, error) {
 	c.RLock()
 	defer c.RUnlock()

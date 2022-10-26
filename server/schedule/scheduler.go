@@ -43,6 +43,7 @@ type Scheduler interface {
 	Cleanup(cluster Cluster)
 	Schedule(cluster Cluster, dryRun bool) ([]*operator.Operator, []plan.Plan)
 	IsScheduleAllowed(cluster Cluster) bool
+	UpdateConfig(args []string) error
 }
 
 // EncodeConfig encode the custom config for each scheduler.

@@ -771,6 +771,40 @@ func (c *RaftCluster) IsPrepared() bool {
 
 var regionGuide = core.GenerateRegionGuideFunc(true)
 
+func (c *RaftCluster) addTransferLeaderScheduler(regionID string) error {
+	args := []string{regionID}
+	s, err := schedule.CreateScheduler(schedulers.TransferLeaderName, c.GetOperatorController(), c.storage, schedule.ConfigSliceDecoder(schedulers.TransferLeaderName, args))
+	if err != nil {
+		return err
+	}
+	log.Info("create scheduler", zap.String("scheduler-name", s.GetName()), zap.Strings("scheudler-args", args))
+	if err = c.AddScheduler(s, args...); err != nil {
+		log.Error("can not add scheduler", zap.String("scheduler-name", s.GetName()), zap.Strings("scheduler-args", args), errs.ZapError(err))
+	} else if err = c.opt.Persist(c.GetStorage()); err != nil {
+		log.Error("can not persist scheduler config", errs.ZapError(err))
+	} else {
+		log.Info("add scheduler successfully", zap.String("scheduler-name", schedulers.TransferLeaderName), zap.Strings("scheduler-args", args))
+	}
+	return err
+}
+
+func (c *RaftCluster) addTransferLeaderSchedulerIfNecessary(region *core.RegionInfo) error {
+	if region.GetLeader().IsWitness {
+		return nil
+	}
+	if exist, err := c.IsSchedulerExisted(schedulers.TransferLeaderName); !exist {
+		if err != nil && !errors.ErrorEqual(err, errs.ErrSchedulerNotFound.FastGenByArgs()) {
+			return err
+		}
+		return c.addTransferLeaderScheduler(strconv.FormatUint(region.GetID(), 10))
+	}
+	s, ok := c.coordinator.schedulers[schedulers.TransferLeaderName]
+	if !ok {
+		return errs.ErrSchedulerNotFound.FastGenByArgs()
+	}
+	return s.UpdateConfig([]string{strconv.FormatUint(region.GetID(), 10)})
+}
+
 // processRegionHeartbeat updates the region information.
 func (c *RaftCluster) processRegionHeartbeat(region *core.RegionInfo) error {
 	origin, err := c.core.PreCheckPutRegion(region)
@@ -787,6 +821,8 @@ func (c *RaftCluster) processRegionHeartbeat(region *core.RegionInfo) error {
 		peerInfo := core.NewPeerInfo(peer, region.GetWriteLoads(), interval)
 		c.hotStat.CheckWriteAsync(statistics.NewCheckPeerTask(peerInfo, region))
 	}
+	// TODO: make sure how to handle the err if any
+	c.addTransferLeaderSchedulerIfNecessary(region)
 
 	// Save to storage if meta is updated.
 	// Save to cache if meta or leader is updated, or contains any down/pending peer.
