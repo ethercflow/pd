@@ -650,11 +650,7 @@ type DemoteVoter struct {
 }
 
 func (dv DemoteVoter) String() string {
-	info := "non-witness"
-	if dv.IsWitness {
-		info = "witness"
-	}
-	return fmt.Sprintf("demote voter peer %v on store %v to %v learner", dv.PeerID, dv.ToStore, info)
+	return fmt.Sprintf("demote voter peer %v on store %v to learner", dv.PeerID, dv.ToStore)
 }
 
 // ConfVerChanged returns the delta value for version increased by this step.
@@ -669,9 +665,6 @@ func (dv DemoteVoter) IsFinish(region *core.RegionInfo) bool {
 	if peer := region.GetStoreLearner(dv.ToStore); peer != nil {
 		if peer.GetId() != dv.PeerID {
 			log.Warn("obtain unexpected peer", zap.String("expect", dv.String()), zap.Uint64("obtain-learner", peer.GetId()))
-			return false
-		}
-		if peer.IsWitness != dv.IsWitness {
 			return false
 		}
 		return region.GetPendingLearner(peer.GetId()) == nil
