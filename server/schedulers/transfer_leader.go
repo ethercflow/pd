@@ -54,19 +54,18 @@ func init() {
 			if err != nil {
 				return errs.ErrStrconvParseUint.Wrap(err).FastGenWithCause()
 			}
-			regions := conf.getRegions()
-			for _, id := range regions {
+			for _, id := range conf.Regions {
 				if id == regionID {
 					return errs.ErrSchedulerConfig.FastGen("dup id")
 				}
 			}
-			regions = append(regions, regionID)
+			conf.Regions = append(conf.Regions, regionID)
 			return nil
 		}
 	})
 
 	schedule.RegisterScheduler(TransferLeaderType, func(opController *schedule.OperatorController, storage endpoint.ConfigStorage, decoder schedule.ConfigDecoder) (schedule.Scheduler, error) {
-		conf := &transferLeaderSchedulerConfig{regions: make([]uint64, 0), storage: storage}
+		conf := &transferLeaderSchedulerConfig{Regions: make([]uint64, 0), storage: storage}
 		if err := decoder(conf); err != nil {
 			return nil, err
 		}
@@ -78,23 +77,43 @@ func init() {
 type transferLeaderSchedulerConfig struct {
 	mu      syncutil.RWMutex
 	storage endpoint.ConfigStorage
-	regions []uint64
+	Regions []uint64
 	cluster schedule.Cluster
 }
 
 func (conf *transferLeaderSchedulerConfig) getRegions() []uint64 {
 	conf.mu.RLock()
 	defer conf.mu.RUnlock()
-	return conf.regions
+	return conf.Regions
+}
+
+func (conf *transferLeaderSchedulerConfig) BuildWithArgs(args []string) error {
+	if len(args) != 1 {
+		return errs.ErrSchedulerConfig.FastGenByArgs("id")
+	}
+	regionID, err := strconv.ParseUint(args[0], 10, 64)
+	if err != nil {
+		return errs.ErrStrconvParseUint.Wrap(err).FastGenWithCause()
+	}
+	conf.mu.RLock()
+	for _, id := range conf.Regions {
+		if id == regionID {
+			conf.mu.RUnlock()
+			return errs.ErrSchedulerConfig.FastGen("dup id")
+		}
+	}
+	conf.Regions = append(conf.Regions, regionID)
+	conf.mu.RUnlock()
+	return nil
 }
 
 func (conf *transferLeaderSchedulerConfig) Clone() *transferLeaderSchedulerConfig {
 	conf.mu.RLock()
 	defer conf.mu.RUnlock()
-	regions := make([]uint64, len(conf.regions))
-	copy(regions, conf.regions)
+	regions := make([]uint64, len(conf.Regions))
+	copy(regions, conf.Regions)
 	return &transferLeaderSchedulerConfig{
-		regions: regions,
+		Regions: regions,
 	}
 }
 
@@ -116,12 +135,11 @@ func (conf *transferLeaderSchedulerConfig) removeRegionID(id uint64) (succ bool,
 	conf.mu.Lock()
 	defer conf.mu.Unlock()
 	succ, last = false, false
-	regionIDs := conf.getRegions()
-	for i, other := range regionIDs {
+	for i, other := range conf.Regions {
 		if other == id {
-			regionIDs = append(regionIDs[:i], regionIDs[i+1:]...)
+			conf.Regions = append(conf.Regions[:i], conf.Regions[i+1:]...)
 			succ = true
-			last = len(regionIDs) == 0
+			last = len(conf.Regions) == 0
 			break
 		}
 	}
@@ -143,10 +161,6 @@ func newTransferLeaderScheduler(opController *schedule.OperatorController, conf 
 		BaseScheduler: NewBaseScheduler(opController),
 		conf:          conf,
 	}
-}
-
-func (s *transferLeaderScheduler) RegionIDs() []uint64 {
-	return s.conf.getRegions()
 }
 
 func (s *transferLeaderScheduler) GetName() string {
@@ -177,29 +191,16 @@ func (s *transferLeaderScheduler) Schedule(cluster schedule.Cluster, dryRun bool
 }
 
 func (s *transferLeaderScheduler) UpdateConfig(args []string) error {
-	if len(args) != 1 {
-		return errs.ErrSchedulerConfig.FastGenByArgs("id")
-	}
-	regionID, err := strconv.ParseUint(args[0], 10, 64)
+	err := s.conf.BuildWithArgs(args)
 	if err != nil {
-		return errs.ErrStrconvParseUint.Wrap(err).FastGenWithCause()
-	}
-	s.conf.mu.RLock()
-	regions := s.conf.getRegions()
-	for _, id := range regions {
-		if id == regionID {
-			s.conf.mu.RUnlock()
-			return errs.ErrSchedulerConfig.FastGen("dup id")
-		}
-	}
-	regions = append(regions, regionID)
-	s.conf.mu.RUnlock()
-	err = s.conf.Persist()
-	if err != nil {
-		s.conf.removeRegionID(regionID)
 		return err
 	}
-	return nil
+	err = s.conf.Persist()
+	if err != nil {
+		regionID, _ := strconv.ParseUint(args[0], 10, 64)
+		s.conf.removeRegionID(regionID)
+	}
+	return err
 }
 
 type transferLeaderSchedulerConf interface {
