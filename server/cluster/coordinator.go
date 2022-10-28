@@ -37,6 +37,7 @@ import (
 	"github.com/tikv/pd/server/schedule/hbstream"
 	"github.com/tikv/pd/server/schedule/operator"
 	"github.com/tikv/pd/server/schedule/plan"
+	"github.com/tikv/pd/server/schedulers"
 	"github.com/tikv/pd/server/statistics"
 	"github.com/tikv/pd/server/storage"
 	"go.uber.org/zap"
@@ -941,10 +942,6 @@ func (s *scheduleController) GetDelayUntil() int64 {
 	return 0
 }
 
-func (s *scheduleController) UpdateConfig(args []string) error {
-	return s.Scheduler.UpdateConfig(args)
-}
-
 func (c *coordinator) getPausedSchedulerDelayAt(name string) (int64, error) {
 	c.RLock()
 	defer c.RUnlock()
@@ -969,4 +966,12 @@ func (c *coordinator) getPausedSchedulerDelayUntil(name string) (int64, error) {
 		return -1, errs.ErrSchedulerNotFound.FastGenByArgs()
 	}
 	return s.GetDelayUntil(), nil
+}
+
+func (c *coordinator) CheckTransferLeader(region *core.RegionInfo) {
+	s, ok := c.schedulers[schedulers.TransferLeaderName]
+	if !ok {
+		return
+	}
+	s.RecvConfig() <- region
 }

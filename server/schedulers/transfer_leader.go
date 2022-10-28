@@ -79,6 +79,10 @@ type transferLeaderSchedulerConfig struct {
 	storage endpoint.ConfigStorage
 	Regions []uint64
 	cluster schedule.Cluster
+
+	wg                sync.WaitGroup
+	ctx               context.Context
+	cancel            context.CancelFunc
 }
 
 func (conf *transferLeaderSchedulerConfig) getRegions() []uint64 {
@@ -148,15 +152,20 @@ func (conf *transferLeaderSchedulerConfig) getSchedulerName() string {
 
 type transferLeaderScheduler struct {
 	*BaseScheduler
-	conf *transferLeaderSchedulerConfig
+	conf    *transferLeaderSchedulerConfig
+	reigons chan *core.RegionInfo
 }
 
 // newTransferLeaderScheduler creates an admin scheduler that transfers leader of a region.
 func newTransferLeaderScheduler(opController *schedule.OperatorController, conf *transferLeaderSchedulerConfig) schedule.Scheduler {
-	return &transferLeaderScheduler{
+	s:= &transferLeaderScheduler{
 		BaseScheduler: NewBaseScheduler(opController),
 		conf:          conf,
+		regions: make(chan *core.RegionInfo, 1000)
 	}
+	
+
+	return s
 }
 
 func (s *transferLeaderScheduler) GetName() string {
@@ -177,10 +186,6 @@ func (s *transferLeaderScheduler) IsScheduleAllowed(cluster schedule.Cluster) bo
 	allowed := s.OpController.OperatorCount(operator.OpLeader) < cluster.GetOpts().GetLeaderScheduleLimit()
 	if !allowed {
 		operator.OperatorLimitCounter.WithLabelValues(s.GetType(), operator.OpLeader.String()).Inc()
-	}
-	if len(s.conf.getRegions()) == 0 {
-		allowed = false
-		cluster.RemoveScheduler(TransferLeaderName)
 	}
 	return allowed
 }

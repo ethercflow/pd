@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/tikv/pd/pkg/errs"
 	"github.com/tikv/pd/server/config"
+	"github.com/tikv/pd/server/core"
 	"github.com/tikv/pd/server/schedule/operator"
 	"github.com/tikv/pd/server/schedule/plan"
 	"github.com/tikv/pd/server/storage/endpoint"
@@ -43,7 +44,7 @@ type Scheduler interface {
 	Cleanup(cluster Cluster)
 	Schedule(cluster Cluster, dryRun bool) ([]*operator.Operator, []plan.Plan)
 	IsScheduleAllowed(cluster Cluster) bool
-	UpdateConfig(args []string) error
+	RecvConfig() chan<- interface{}
 }
 
 // EncodeConfig encode the custom config for each scheduler.

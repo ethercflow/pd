@@ -93,4 +93,4 @@ func (s *BaseScheduler) Prepare(cluster schedule.Cluster) error { return nil }
 func (s *BaseScheduler) Cleanup(cluster schedule.Cluster) {}
 
 // UpdateConfig update config for the scheduler
-func (s *BaseScheduler) UpdateConfig(args []string) error { return nil }
+func (s *BaseScheduler) RecvConfig(args []string) chan<- interface{}
