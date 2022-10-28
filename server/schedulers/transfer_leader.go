@@ -131,19 +131,15 @@ func (conf *transferLeaderSchedulerConfig) Persist() error {
 	return conf.storage.SaveScheduleConfig(name, data)
 }
 
-func (conf *transferLeaderSchedulerConfig) removeRegionID(id uint64) (succ bool, last bool) {
+func (conf *transferLeaderSchedulerConfig) removeRegionID(id uint64) {
 	conf.mu.Lock()
 	defer conf.mu.Unlock()
-	succ, last = false, false
 	for i, other := range conf.Regions {
 		if other == id {
 			conf.Regions = append(conf.Regions[:i], conf.Regions[i+1:]...)
-			succ = true
-			last = len(conf.Regions) == 0
 			break
 		}
 	}
-	return succ, last
 }
 
 func (conf *transferLeaderSchedulerConfig) getSchedulerName() string {
@@ -182,6 +178,10 @@ func (s *transferLeaderScheduler) IsScheduleAllowed(cluster schedule.Cluster) bo
 	if !allowed {
 		operator.OperatorLimitCounter.WithLabelValues(s.GetType(), operator.OpLeader.String()).Inc()
 	}
+	if len(s.conf.getRegions()) == 0 {
+		allowed = false
+		cluster.RemoveScheduler(TransferLeaderName)
+	}
 	return allowed
 }
 
@@ -205,6 +205,8 @@ func (s *transferLeaderScheduler) UpdateConfig(args []string) error {
 
 type transferLeaderSchedulerConf interface {
 	getRegions() []uint64
+	removeRegionID(uint64)
+	Persist() error
 }
 
 func scheduleTransferLeaderBatch(name, typ string, cluster schedule.Cluster, conf transferLeaderSchedulerConf, batchSize int) []*operator.Operator {
@@ -262,7 +264,10 @@ func scheduleTransferLeaderOnce(name, typ string, cluster schedule.Cluster, conf
 			op.SetPriorityLevel(core.Urgent)
 			op.Counters = append(op.Counters, schedulerCounter.WithLabelValues(name, "new-operator"))
 			ops = append(ops, op)
+			conf.removeRegionID(id)
 		}
 	}
+	conf.Persist()
+
 	return ops
 }

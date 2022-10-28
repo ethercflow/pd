@@ -82,8 +82,11 @@ func TestTransferLeaderWithUnhealthyPeer(t *testing.T) {
 	tc.PutRegion(region.Clone(withPendingPeer))
 	ops, _ := sl.Schedule(tc, false)
 	testutil.CheckMultiTargetTransferLeader(re, ops[0], operator.OpLeader, 1, []uint64{3})
+	ops, _ = sl.Schedule(tc, false)
+	re.Nil(ops)
 	// only down
 	tc.PutRegion(region.Clone(withDownPeer))
+	sl.UpdateConfig([]string{"1"})
 	ops, _ = sl.Schedule(tc, false)
 	testutil.CheckMultiTargetTransferLeader(re, ops[0], operator.OpLeader, 1, []uint64{2})
 	// pending + down
