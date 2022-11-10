@@ -16,6 +16,7 @@ package checker
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/pingcap/kvproto/pkg/pdpb"
 	"github.com/stretchr/testify/suite"
 	"github.com/tikv/pd/pkg/cache"
+	"github.com/tikv/pd/pkg/errs"
 	"github.com/tikv/pd/pkg/mock/mockcluster"
 	"github.com/tikv/pd/pkg/testutil"
 	"github.com/tikv/pd/server/config"
@@ -376,7 +378,7 @@ func (suite *ruleCheckerTestSuite) TestFixRuleWitness4() {
 	suite.cluster.AddLabelsStore(3, 1, map[string]string{"C": "voter"})
 	suite.cluster.AddLeaderRegion(1, 1, 2, 3)
 
-	suite.ruleManager.SetRule(&placement.Rule{
+	err := suite.ruleManager.SetRule(&placement.Rule{
 		GroupID:   "pd",
 		ID:        "r1",
 		Index:     100,
@@ -388,8 +390,8 @@ func (suite *ruleCheckerTestSuite) TestFixRuleWitness4() {
 			{Key: "A", Op: "In", Values: []string{"leader"}},
 		},
 	})
-	op := suite.rc.Check(suite.cluster.GetRegion(1))
-	suite.Nil(op)
+	suite.Error(err)
+	suite.Equal(errs.ErrRuleContent.FastGenByArgs(fmt.Sprintf("define multiple witness by count %d", 2)).Error(), err.Error())
 }
 
 func (suite *ruleCheckerTestSuite) TestFixRuleWitness5() {
