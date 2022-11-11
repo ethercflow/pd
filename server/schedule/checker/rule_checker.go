@@ -163,18 +163,14 @@ func (c *RuleChecker) fixRulePeer(region *core.RegionInfo, fit *placement.Region
 	if len(rf.Peers) < rf.Rule.Count {
 		return c.addRulePeer(region, rf)
 	}
-	isWitnessEnabled := c.isWitnessEnabled()
 	// fix down/offline peers.
 	for _, peer := range rf.Peers {
 		if c.isDownPeer(region, peer) {
 			if c.isStoreDownTimeHitMaxDownTime(peer.GetStoreId()) {
 				checkerCounter.WithLabelValues("rule_checker", "replace-down").Inc()
-				if isWitnessEnabled {
-					rf.Rule.IsWitness = true
-				}
 				return c.replaceUnexpectRulePeer(region, rf, fit, peer, downStatus)
 			}
-			if isWitnessEnabled {
+			if c.isWitnessEnabled() {
 				if witness, ok := c.hasAvailableWitness(region, peer); ok {
 					checkerCounter.WithLabelValues("rule_checker", "promote-witness").Inc()
 					op, err := operator.CreateNonWitnessPeerOperator("promote-witness", c.cluster, region, witness)
@@ -230,7 +226,17 @@ func (c *RuleChecker) replaceUnexpectRulePeer(region *core.RegionInfo, rf *place
 		c.handleFilterState(region, filterByTempState)
 		return nil, errNoStoreToReplace
 	}
-	newPeer := &metapb.Peer{StoreId: store, Role: rf.Rule.Role.MetaPeerRole(), IsWitness: rf.Rule.IsWitness}
+	var isWitness bool
+	if c.isWitnessEnabled() {
+		if status == "down" {
+			isWitness = true
+		} else {
+			isWitness = rf.Rule.IsWitness
+		}
+	} else {
+		isWitness = false
+	}
+	newPeer := &metapb.Peer{StoreId: store, Role: rf.Rule.Role.MetaPeerRole(), IsWitness: isWitness}
 	//  pick the smallest leader store to avoid the Offline store be snapshot generator bottleneck.
 	var newLeader *metapb.Peer
 	if region.GetLeader().GetId() == peer.GetId() {
