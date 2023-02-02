@@ -226,7 +226,7 @@ type BecomeWitness struct {
 // ConfVerChanged returns the delta value for version increased by this step.
 func (bw BecomeWitness) ConfVerChanged(region *core.RegionInfo) uint64 {
 	peer := region.GetStorePeer(bw.StoreID)
-	return typeutil.BoolToUint64((peer.GetId() == bw.PeerID) && peer.GetIsWitness())
+	return typeutil.BoolToUint64(peer.GetId() == bw.PeerID)
 }
 
 func (bw BecomeWitness) String() string {
@@ -285,10 +285,7 @@ type BecomeNonWitness struct {
 // ConfVerChanged returns the delta value for version increased by this step.
 func (bn BecomeNonWitness) ConfVerChanged(region *core.RegionInfo) uint64 {
 	peer := region.GetStorePeer(bn.StoreID)
-	// After TiKV has applied this raftcmd, the region ConfVer will be changed immediately,
-	// non-witness will be in pending state until apply snapshot completes, will check
-	// pending stat in `IsFinish`.
-	return typeutil.BoolToUint64((peer.GetId() == bn.PeerID) && !peer.GetIsWitness())
+	return typeutil.BoolToUint64(peer.GetId() == bn.PeerID)
 }
 
 func (bn BecomeNonWitness) String() string {
@@ -415,7 +412,7 @@ func (bsw BatchSwitchWitness) Influence(opInfluence OpInfluence, region *core.Re
 // Timeout returns duration that current step may take.
 func (bsw BatchSwitchWitness) Timeout(regionSize int64) time.Duration {
 	count := uint64(len(bsw.ToWitnesses)+len(bsw.ToNonWitnesses)) + 1
-	return fastStepWaitDuration(regionSize) * time.Duration(count)
+	return slowStepWaitDuration(regionSize) * time.Duration(count)
 }
 
 // GetCmd returns the schedule command for heartbeat response.
