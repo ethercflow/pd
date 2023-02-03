@@ -475,6 +475,36 @@ func (suite *ruleCheckerTestSuite) TestFixRuleWitness6() {
 	suite.NotNil(op)
 }
 
+func (suite *ruleCheckerTestSuite) TestFixRuleWitness7() {
+	suite.cluster.AddLabelsStore(1, 1, map[string]string{"A": "voter"})
+	suite.cluster.AddLabelsStore(2, 1, map[string]string{"B": "voter"})
+	suite.cluster.AddLabelsStore(3, 1, map[string]string{"C": "leader"})
+	suite.cluster.AddLeaderRegion(1, 3, 1, 2)
+
+	err := suite.ruleManager.SetRules([]*placement.Rule{
+		{
+			GroupID:   "pd",
+			ID:        "default",
+			Index:     100,
+			Role:      placement.Voter,
+			IsWitness: false,
+			Count:     2,
+		},
+		{
+			GroupID:   "pd",
+			ID:        "r1",
+			Index:     100,
+			Role:      placement.Voter,
+			Count:     1,
+			IsWitness: true,
+		},
+	})
+	suite.NoError(err)
+
+	op := suite.rc.Check(suite.cluster.GetRegion(1))
+	suite.NotNil(op)
+}
+
 func (suite *ruleCheckerTestSuite) TestDisableWitness() {
 	suite.cluster.AddLabelsStore(1, 1, map[string]string{"A": "leader"})
 	suite.cluster.AddLabelsStore(2, 1, map[string]string{"B": "voter"})

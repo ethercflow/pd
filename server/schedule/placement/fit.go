@@ -18,10 +18,13 @@ import (
 	"math"
 	"math/bits"
 	"sort"
+	"unsafe"
 
 	"github.com/pingcap/kvproto/pkg/metapb"
+	"github.com/pingcap/log"
 	"github.com/tikv/pd/pkg/core"
 	"github.com/tikv/pd/pkg/utils/syncutil"
+	"go.uber.org/zap"
 )
 
 const replicaBaseScore = 100
@@ -245,7 +248,7 @@ func (w *fitWorker) fitRule(index int) bool {
 		// 2. Role match, or can match after transformed.
 		// 3. Not selected by other rules.
 		for _, p := range w.peers {
-			if !p.selected && MatchLabelConstraints(p.store, w.rules[index].LabelConstraints) {
+			if !p.selected && MatchLabelConstraints(p.store, w.rules[index].LabelConstraints) && !(p.isLeader && w.rules[index].IsWitness) {
 				candidates = append(candidates, p)
 			}
 		}
@@ -312,7 +315,16 @@ func unSelectPeers(seleted []*fitPeer) {
 // compareBest checks if the selected peers is better then previous best.
 // Returns true if it replaces `bestFit` with a better alternative.
 func (w *fitWorker) compareBest(selected []*fitPeer, index int) bool {
+	if w.supportWitness {
+		log.Error("DEBUGLEADER in compareBest", zap.Int("index", index))
+	}
 	rf := newRuleFit(w.rules[index], selected, w.supportWitness)
+	if rf == nil {
+		if w.supportWitness {
+			log.Error("DEBUGLEADER in compare best return false caused by inavald rule", zap.Int("index", index))
+		}
+		return false
+	}
 	cmp := 1
 	if best := w.bestFit.RuleFits[index]; best != nil {
 		cmp = compareRuleFit(rf, best)
@@ -327,12 +339,21 @@ func (w *fitWorker) compareBest(selected []*fitPeer, index int) bool {
 		}
 		w.fitRule(index + 1)
 		w.updateOrphanPeers(index + 1)
+		if w.supportWitness {
+			log.Error("DEBUGLEADER in compare case 1 return true", zap.Int("index", index), zap.String("rf.Rule", rf.Rule.String()), zap.String("rf.Rule", rf.Rule.String()), zap.Int("Diff", len(rf.PeersWithDifferentRole)), zap.Int("Pees", len(rf.Peers)))
+		}
 		return true
 	case 0:
 		if w.fitRule(index + 1) {
 			w.bestFit.RuleFits[index] = rf
+			if w.supportWitness {
+				log.Error("DEBUGLEADER in compare case 0 return true", zap.Int("index", index), zap.String("rf.Rule", rf.Rule.String()), zap.String("rf.Rule", rf.Rule.String()), zap.Int("Diff", len(rf.PeersWithDifferentRole)), zap.Int("Pees", len(rf.Peers)))
+			}
 			return true
 		}
+	}
+	if w.supportWitness {
+		log.Error("DEBUGLEADER in compare best return false", zap.Int("index", index), zap.String("rf.Rule", rf.Rule.String()), zap.Int("Diff", len(rf.PeersWithDifferentRole)), zap.Int("Pees", len(rf.Peers)))
 	}
 	return false
 }
@@ -358,8 +379,17 @@ func newRuleFit(rule *Rule, peers []*fitPeer, supportWitness bool) *RuleFit {
 		if !p.matchRoleStrict(rule.Role) ||
 			(supportWitness && (p.IsWitness != rule.IsWitness)) ||
 			(!supportWitness && p.IsWitness) {
+			if supportWitness {
+				log.Error("DEBUGLEADER in newRuleFit", zap.Uint64("peer_id", p.Id), zap.Uint64("store_id", p.StoreId), zap.Bool("isLeader", p.isLeader), zap.Bool("p.isWitness", p.IsWitness), zap.Bool("rule.isWitness", rule.IsWitness))
+			}
+			if p.isLeader {
+				return nil
+			}
 			rf.PeersWithDifferentRole = append(rf.PeersWithDifferentRole, p.Peer)
 		}
+	}
+	if supportWitness {
+		log.Error("DEBUGLEADER in newRuleFit before return", zap.String("rf.Rule", rf.Rule.String()), zap.Int("PeerWithDiffRole len", len(rf.PeersWithDifferentRole)), zap.Int("Peer len", len(rf.Peers)), zap.Uintptr("rf's addr", uintptr(unsafe.Pointer(rf))))
 	}
 	return rf
 }

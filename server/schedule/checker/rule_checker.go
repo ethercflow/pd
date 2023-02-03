@@ -19,6 +19,7 @@ import (
 	"errors"
 	"math"
 	"time"
+	"unsafe"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/kvproto/pkg/metapb"
@@ -148,6 +149,9 @@ func (c *RuleChecker) CheckWithFit(region *core.RegionInfo, fit *placement.Regio
 	c.record.refresh(c.cluster)
 
 	if len(fit.RuleFits) == 0 {
+		if c.isWitnessEnabled() {
+			log.Error("DEBUGLEADER after get fit: get none")
+		}
 		ruleCheckerNeedSplitCounter.Inc()
 		// If the region matches no rules, the most possible reason is it spans across
 		// multiple rules.
@@ -161,9 +165,18 @@ func (c *RuleChecker) CheckWithFit(region *core.RegionInfo, fit *placement.Regio
 		return op
 	}
 	for _, rf := range fit.RuleFits {
+		if c.isWitnessEnabled() {
+			log.Error("DEBUGLEADER before fix rule",
+				zap.String("rf.Rule", rf.Rule.String()),
+				zap.Int("Peer len", len(rf.Peers)),
+				zap.Int("Diff Role len", len(rf.PeersWithDifferentRole)),
+				zap.Uintptr("rf's addr", uintptr(unsafe.Pointer(rf))))
+		}
 		op, err := c.fixRulePeer(region, fit, rf)
 		if err != nil {
-			log.Debug("fail to fix rule peer", zap.String("rule-group", rf.Rule.GroupID), zap.String("rule-id", rf.Rule.ID), errs.ZapError(err))
+			log.Debug("fail to fix rule peer",
+				zap.String("rule-group", rf.Rule.GroupID),
+				zap.String("rule-id", rf.Rule.ID), errs.ZapError(err))
 			continue
 		}
 		if op != nil {
@@ -219,6 +232,9 @@ func (c *RuleChecker) fixRulePeer(region *core.RegionInfo, fit *placement.Region
 	}
 	// fix loose matched peers.
 	for _, peer := range rf.PeersWithDifferentRole {
+		if c.isWitnessEnabled() {
+			log.Error("DEBUGLEADER before fixLooseMatchPeer: ", zap.Uint64("peer_id: ", peer.Id), zap.Uint64("store_id: ", peer.StoreId), zap.Bool("p.isWitness: ", peer.IsWitness), zap.Bool("rule.isWitness: ", rf.Rule.IsWitness), zap.Uint64("leaderID: ", region.GetLeader().GetId()))
+		}
 		op, err := c.fixLooseMatchPeer(region, fit, rf, peer)
 		if err != nil {
 			return nil, err
