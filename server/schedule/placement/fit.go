@@ -213,7 +213,7 @@ func newFitWorker(stores []*core.StoreInfo, region *core.RegionInfo, rules []*Ru
 	sort.Slice(peers, func(i, j int) bool {
 		// Put healthy peers in front of priority to fit healthy peers.
 		si, sj := stateScore(region, peers[i].GetId()), stateScore(region, peers[j].GetId())
-		return si > sj
+		return si > sj || (si == sj && peers[i].GetId() < peers[j].GetId())
 	})
 	if supportWitness {
 		for _, p := range peers {
@@ -270,7 +270,11 @@ func (w *fitWorker) fitRule(index int) bool {
 
 	if w.supportWitness && w.rules[index].IsWitness {
 		for i, cand := range candidates {
-			log.Error("in fit Rule witness", zap.Int("i", i), zap.String("peer", cand.String()))
+			log.Error("in fit Rule witness", zap.Int("index", index), zap.Int("i", i), zap.String("peer", cand.String()))
+		}
+	} else {
+		for i, cand := range candidates {
+			log.Error("in fit Rule non-witness", zap.Int("index", index), zap.Int("i", i), zap.String("peer", cand.String()))
 		}
 	}
 
