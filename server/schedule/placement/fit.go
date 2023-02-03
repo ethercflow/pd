@@ -17,7 +17,9 @@ package placement
 import (
 	"math"
 	"math/bits"
+	"math/rand"
 	"sort"
+	"time"
 
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/log"
@@ -213,7 +215,7 @@ func newFitWorker(stores []*core.StoreInfo, region *core.RegionInfo, rules []*Ru
 	sort.Slice(peers, func(i, j int) bool {
 		// Put healthy peers in front of priority to fit healthy peers.
 		si, sj := stateScore(region, peers[i].GetId()), stateScore(region, peers[j].GetId())
-		return si > sj || (si == sj && peers[i].GetId() < peers[j].GetId())
+		return si > sj || (si == sj && rand.Float32() < 0.5)
 	})
 	if supportWitness {
 		for _, p := range peers {
@@ -481,4 +483,8 @@ func stateScore(region *core.RegionInfo, peerID uint64) int {
 	default:
 		return 2
 	}
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
