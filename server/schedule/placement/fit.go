@@ -20,8 +20,10 @@ import (
 	"sort"
 
 	"github.com/pingcap/kvproto/pkg/metapb"
+	"github.com/pingcap/log"
 	"github.com/tikv/pd/pkg/core"
 	"github.com/tikv/pd/pkg/utils/syncutil"
+	"go.uber.org/zap"
 )
 
 const replicaBaseScore = 100
@@ -248,6 +250,12 @@ func (w *fitWorker) fitRule(index int) bool {
 			if !p.selected && MatchLabelConstraints(p.store, w.rules[index].LabelConstraints) && !(p.isLeader && w.supportWitness && w.rules[index].IsWitness) {
 				candidates = append(candidates, p)
 			}
+		}
+	}
+
+	if w.supportWitness && w.rules[index].IsWitness {
+		for i, cand := range candidates {
+			log.Error("in fit Rule witness", zap.Int("i", i), zap.String("peer", cand.String()));
 		}
 	}
 
