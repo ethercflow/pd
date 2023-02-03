@@ -203,12 +203,24 @@ func newFitPeer(stores []*core.StoreInfo, region *core.RegionInfo, fitPeers []*m
 
 func newFitWorker(stores []*core.StoreInfo, region *core.RegionInfo, rules []*Rule, supportWitness bool) *fitWorker {
 	peers := newFitPeer(stores, region, region.GetPeers())
+	if supportWitness {
+		for _, p := range peers {
+			log.Error("in new FitWorker before sort", zap.String("peer", p.String()))
+		}
+	}
+
 	// Sort peers to keep the match result deterministic.
 	sort.Slice(peers, func(i, j int) bool {
 		// Put healthy peers in front of priority to fit healthy peers.
 		si, sj := stateScore(region, peers[i].GetId()), stateScore(region, peers[j].GetId())
 		return si > sj
 	})
+	if supportWitness {
+		for _, p := range peers {
+			log.Error("in new FitWorker after sort", zap.String("peer", p.String()))
+		}
+	}
+
 	return &fitWorker{
 		stores:         stores,
 		bestFit:        RegionFit{RuleFits: make([]*RuleFit, len(rules))},
@@ -221,7 +233,7 @@ func newFitWorker(stores []*core.StoreInfo, region *core.RegionInfo, rules []*Ru
 
 func (w *fitWorker) run() {
 	if w.supportWitness {
-		log.Error("run call fitRule(0)");
+		log.Error("run call fitRule(0)")
 	}
 	w.fitRule(0)
 	w.updateOrphanPeers(0) // All peers go to orphanList when RuleList is empty.
@@ -258,7 +270,7 @@ func (w *fitWorker) fitRule(index int) bool {
 
 	if w.supportWitness && w.rules[index].IsWitness {
 		for i, cand := range candidates {
-			log.Error("in fit Rule witness", zap.Int("i", i), zap.String("peer", cand.String()));
+			log.Error("in fit Rule witness", zap.Int("i", i), zap.String("peer", cand.String()))
 		}
 	}
 
@@ -337,14 +349,14 @@ func (w *fitWorker) compareBest(selected []*fitPeer, index int) bool {
 			w.bestFit.RuleFits[i] = nil
 		}
 		if w.supportWitness {
-			log.Error("compareBest 1 fitRule(index+1)", zap.Int("index", index));
+			log.Error("compareBest 1 fitRule(index+1)", zap.Int("index", index))
 		}
 		w.fitRule(index + 1)
 		w.updateOrphanPeers(index + 1)
 		return true
 	case 0:
 		if w.supportWitness {
-			log.Error("compareBest 0 fitRule(index+1)", zap.Int("index", index));
+			log.Error("compareBest 0 fitRule(index+1)", zap.Int("index", index))
 		}
 		if w.fitRule(index + 1) {
 			w.bestFit.RuleFits[index] = rf
