@@ -268,13 +268,15 @@ func (w *fitWorker) fitRule(index int) bool {
 		}
 	}
 
-	if w.supportWitness && w.rules[index].IsWitness {
-		for i, cand := range candidates {
-			log.Error("in fit Rule witness", zap.Int("index", index), zap.Int("i", i), zap.String("peer", cand.String()))
-		}
-	} else {
-		for i, cand := range candidates {
-			log.Error("in fit Rule non-witness", zap.Int("index", index), zap.Int("i", i), zap.String("peer", cand.String()))
+	if w.supportWitness {
+		if w.rules[index].IsWitness {
+			for i, cand := range candidates {
+				log.Error("in fit Rule witness", zap.Int("index", index), zap.Int("i", i), zap.String("peer", cand.String()))
+			}
+		} else {
+			for i, cand := range candidates {
+				log.Error("in fit Rule non-witness", zap.Int("index", index), zap.Int("i", i), zap.String("peer", cand.String()))
+			}
 		}
 	}
 
