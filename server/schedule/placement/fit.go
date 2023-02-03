@@ -207,7 +207,7 @@ func newFitWorker(stores []*core.StoreInfo, region *core.RegionInfo, rules []*Ru
 	sort.Slice(peers, func(i, j int) bool {
 		// Put healthy peers in front of priority to fit healthy peers.
 		si, sj := stateScore(region, peers[i].GetId()), stateScore(region, peers[j].GetId())
-		return si > sj || (si == sj && peers[i].GetId() < peers[j].GetId())
+		return si > sj
 	})
 	return &fitWorker{
 		stores:         stores,
