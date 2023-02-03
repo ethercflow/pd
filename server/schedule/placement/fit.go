@@ -220,6 +220,9 @@ func newFitWorker(stores []*core.StoreInfo, region *core.RegionInfo, rules []*Ru
 }
 
 func (w *fitWorker) run() {
+	if w.supportWitness {
+		log.Error("run call fitRule(0)");
+	}
 	w.fitRule(0)
 	w.updateOrphanPeers(0) // All peers go to orphanList when RuleList is empty.
 }
@@ -333,10 +336,16 @@ func (w *fitWorker) compareBest(selected []*fitPeer, index int) bool {
 		for i := index + 1; i < len(w.rules); i++ {
 			w.bestFit.RuleFits[i] = nil
 		}
+		if w.supportWitness {
+			log.Error("compareBest 1 fitRule(index+1)", zap.Int("index", index));
+		}
 		w.fitRule(index + 1)
 		w.updateOrphanPeers(index + 1)
 		return true
 	case 0:
+		if w.supportWitness {
+			log.Error("compareBest 0 fitRule(index+1)", zap.Int("index", index));
+		}
 		if w.fitRule(index + 1) {
 			w.bestFit.RuleFits[index] = rf
 			return true
