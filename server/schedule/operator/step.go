@@ -531,7 +531,11 @@ func (pl PromoteLearner) ConfVerChanged(region *core.RegionInfo) uint64 {
 }
 
 func (pl PromoteLearner) String() string {
-	return fmt.Sprintf("promote learner peer %v on store %v to voter", pl.PeerID, pl.ToStore)
+	info := "learner peer"
+	if pl.IsWitness {
+		info = "witness learner peer"
+	}
+	return fmt.Sprintf("promote %v %v on store %v to voter", info, pl.PeerID, pl.ToStore)
 }
 
 // IsFinish checks if current step is finished. It is also used by ChangePeerV2Leave.
@@ -762,14 +766,19 @@ type DemoteVoter struct {
 }
 
 func (dv DemoteVoter) String() string {
-	return fmt.Sprintf("demote voter peer %v on store %v to learner", dv.PeerID, dv.ToStore)
+	info := "voter peer"
+	if dv.IsWitness {
+		info = "witness voter peer"
+	}
+	return fmt.Sprintf("demote %v %v on store %v to learner", info, dv.PeerID, dv.ToStore)
 }
 
 // ConfVerChanged returns the delta value for version increased by this step.
 func (dv DemoteVoter) ConfVerChanged(region *core.RegionInfo) uint64 {
 	peer := region.GetStorePeer(dv.ToStore)
 	// the demoting peer may be removed later.
-	return typeutil.BoolToUint64(peer == nil || (peer.GetId() == dv.PeerID && peer.GetRole() == metapb.PeerRole_Learner))
+	log.Error("Cal dv's confVerChanged", zap.Uint64("region-id", region.GetID()), zap.String("step", dv.String()), zap.Bool("IsWitness", dv.IsWitness), zap.Bool("peer's IsWitness", peer.GetIsWitness()));
+	return typeutil.BoolToUint64(peer == nil || (peer.GetId() == dv.PeerID && peer.GetRole() == metapb.PeerRole_Learner) || (dv.IsWitness == true && peer.GetIsWitness() == false))
 }
 
 // IsFinish checks if current step is finished.
@@ -823,7 +832,7 @@ func (cpe ChangePeerV2Enter) ConfVerChanged(region *core.RegionInfo) uint64 {
 	for _, dv := range cpe.DemoteVoters {
 		peer := region.GetStorePeer(dv.ToStore)
 		// the demoting peer may be removed later.
-		if peer != nil && (peer.GetId() != dv.PeerID || !core.IsLearnerOrDemotingVoter(peer)) {
+		if peer != nil && (peer.GetId() != dv.PeerID || (!core.IsLearnerOrDemotingVoter(peer) && !(dv.IsWitness == true && peer.GetIsWitness() == false))) {
 			return 0
 		}
 	}

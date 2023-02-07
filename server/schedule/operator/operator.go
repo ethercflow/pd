@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/pingcap/kvproto/pkg/metapb"
-	"github.com/pingcap/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tikv/pd/pkg/core"
 	"go.uber.org/zap"
@@ -318,7 +317,7 @@ func (o *Operator) ConfVerChanged(region *core.RegionInfo) (total uint64) {
 	// including current step, it may has taken effects in this heartbeat
 	for _, step := range o.steps[0 : current+1] {
 		if o.desc == "merge-region" {
-			log.Error("Cal merge-region op's confVerChanged", zap.String("step", step.String()), zap.Uint64("cnt", step.ConfVerChanged(region)));
+			log.Error("Cal merge-region op's confVerChanged", zap.Uint64("region-id", region.GetID()), zap.String("step", step.String()), zap.Uint64("cnt", step.ConfVerChanged(region)));
 		}
 		total += step.ConfVerChanged(region)
 	}
