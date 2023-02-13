@@ -371,12 +371,12 @@ func (w *fitWorker) updateOrphanPeers(index int) {
 }
 
 func newRuleFit(rule *Rule, peers []*fitPeer, supportWitness bool) *RuleFit {
-	rf := &RuleFit{Rule: rule, IsolationScore: isolationScore(peers, rule.LocationLabels), WitnessScore: witnessScore(peers, supportWitness)}
+	rf := &RuleFit{Rule: rule, IsolationScore: isolationScore(peers, rule.LocationLabels), WitnessScore: witnessScore(peers, supportWitness && rule.IsWitness)}
 	for _, p := range peers {
 		rf.Peers = append(rf.Peers, p.Peer)
 		rf.stores = append(rf.stores, p.store)
 		if !p.matchRoleStrict(rule.Role) ||
-			(supportWitness && (p.IsWitness != rule.IsWitness)) ||
+			(supportWitness && rule.IsWitness && !p.IsWitness) ||
 			(!supportWitness && p.IsWitness) {
 			rf.PeersWithDifferentRole = append(rf.PeersWithDifferentRole, p.Peer)
 		}
@@ -468,9 +468,9 @@ func stateScore(region *core.RegionInfo, peerID uint64) int {
 	}
 }
 
-func witnessScore(peers []*fitPeer, supportWitness bool) float64 {
+func witnessScore(peers []*fitPeer, fitWitness bool) float64 {
 	var score float64
-	if !supportWitness || len(peers) == 0 {
+	if !fitWitness || len(peers) == 0 {
 		return 0
 	}
 	for _, p := range peers {
