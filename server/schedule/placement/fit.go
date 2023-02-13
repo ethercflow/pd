@@ -20,7 +20,9 @@ import (
 	"sort"
 
 	"github.com/pingcap/kvproto/pkg/metapb"
+	"github.com/pingcap/log"
 	"github.com/tikv/pd/pkg/core"
+	"go.uber.org/zap"
 )
 
 const replicaBaseScore = 100
@@ -297,6 +299,13 @@ func (w *fitWorker) compareBest(selected []*fitPeer, index int) bool {
 	rf := newRuleFit(w.rules[index], selected, w.supportWitness)
 	cmp := 1
 	if best := w.bestFit.RuleFits[index]; best != nil {
+		if rf.Rule.IsWitness {
+			if len(rf.PeersWithDifferentRole) == 1 {
+				log.Error("in compareBest best is not nil", zap.Int("index", index), zap.Uint64("store_id", rf.PeersWithDifferentRole[0].GetStoreId()), zap.Uint64("peer_id", rf.PeersWithDifferentRole[0].GetId()))
+			} else {
+				log.Error("in compareBest best is not nil", zap.Int("index", index), zap.Int("len(rf.PeersWithDifferentRole)", len(rf.PeersWithDifferentRole)))
+			}
+		}
 		cmp = compareRuleFit(rf, best)
 	}
 
@@ -309,11 +318,33 @@ func (w *fitWorker) compareBest(selected []*fitPeer, index int) bool {
 		}
 		w.fitRule(index + 1)
 		w.updateOrphanPeers(index + 1)
+		if rf.Rule.IsWitness {
+			if len(rf.PeersWithDifferentRole) == 1 {
+				log.Error("in compareBest case 1", zap.Int("index", index), zap.Uint64("store_id", rf.PeersWithDifferentRole[0].GetStoreId()), zap.Uint64("peer_id", rf.PeersWithDifferentRole[0].GetId()))
+			} else {
+				log.Error("in compareBest case 1", zap.Int("index", index), zap.Int("len(rf.PeersWithDifferentRole)", len(rf.PeersWithDifferentRole)))
+			}
+		}
 		return true
 	case 0:
 		if w.fitRule(index + 1) {
 			w.bestFit.RuleFits[index] = rf
+			if rf.Rule.IsWitness {
+				if len(rf.PeersWithDifferentRole) == 1 {
+					log.Error("in compareBest case 0", zap.Int("index", index), zap.Uint64("store_id", rf.PeersWithDifferentRole[0].GetStoreId()), zap.Uint64("peer_id", rf.PeersWithDifferentRole[0].GetId()))
+				} else {
+					log.Error("in compareBest case 0", zap.Int("index", index), zap.Int("len(rf.PeersWithDifferentRole)", len(rf.PeersWithDifferentRole)))
+				}
+			}
 			return true
+		}
+	}
+
+	if rf.Rule.IsWitness {
+		if len(rf.PeersWithDifferentRole) == 1 {
+			log.Error("in compareBest false", zap.Int("index", index), zap.Uint64("store_id", rf.PeersWithDifferentRole[0].GetStoreId()), zap.Uint64("peer_id", rf.PeersWithDifferentRole[0].GetId()))
+		} else {
+			log.Error("in compareBest false", zap.Int("index", index), zap.Int("len(rf.PeersWithDifferentRole)", len(rf.PeersWithDifferentRole)))
 		}
 	}
 	return false
