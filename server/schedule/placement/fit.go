@@ -342,6 +342,9 @@ func (w *fitWorker) compareBest(selected []*fitPeer, index int) bool {
 		}
 		return true
 	case 0:
+		if rf.Rule.IsWitness {
+			log.Error("begin at in compareBest case 0", zap.Int("index", index))
+		}
 		if w.fitRule(index + 1) {
 			w.bestFit.RuleFits[index] = rf
 			if rf.Rule.IsWitness {
