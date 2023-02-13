@@ -17,9 +17,7 @@ package placement
 import (
 	"math"
 	"math/bits"
-	"math/rand"
 	"sort"
-	"time"
 
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/log"
@@ -111,6 +109,7 @@ type RuleFit struct {
 	// IsolationScore indicates at which level of labeling these Peers are
 	// isolated. A larger value is better.
 	IsolationScore float64 `json:"isolation-score"`
+	WitnessScore   float64 `json:"witness-score"`
 	// stores is the stores that the peers are placed in.
 	stores []*core.StoreInfo
 }
@@ -142,6 +141,10 @@ func compareRuleFit(a, b *RuleFit) int {
 	case a.IsolationScore < b.IsolationScore:
 		return -1
 	case a.IsolationScore > b.IsolationScore:
+		return 1
+	case a.WitnessScore < b.WitnessScore:
+		return -1
+	case a.WitnessScore > b.WitnessScore:
 		return 1
 	default:
 		return 0
@@ -241,20 +244,6 @@ func (w *fitWorker) fitRule(index int) bool {
 	if len(candidates) < count {
 		count = len(candidates)
 	}
-
-	if w.supportWitness && w.rules[index].IsWitness {
-		for i, p := range candidates {
-			log.Error("before shuffle", zap.Int("i", i), zap.Uint64("store_id", p.GetStoreId()), zap.Uint64("peer_id", p.GetId()))
-		}
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		r.Shuffle(len(candidates), func(i, j int) {
-			candidates[i], candidates[j] = candidates[j], candidates[i]
-		})
-		for i, p := range candidates {
-			log.Error("after shuffle", zap.Int("i", i), zap.Uint64("store_id", p.GetStoreId()), zap.Uint64("peer_id", p.GetId()))
-		}
-	}
-
 	return w.fixRuleWithCandidates(candidates, index, count)
 }
 
@@ -356,13 +345,6 @@ func (w *fitWorker) compareBest(selected []*fitPeer, index int) bool {
 			}
 			return true
 		}
-
-		if rf.Rule.IsWitness {
-			if rand.Float32() < 0.5 {
-				w.bestFit.RuleFits[index] = rf
-				return true
-			}
-		}
 	}
 
 	if rf.Rule.IsWitness {
@@ -389,7 +371,7 @@ func (w *fitWorker) updateOrphanPeers(index int) {
 }
 
 func newRuleFit(rule *Rule, peers []*fitPeer, supportWitness bool) *RuleFit {
-	rf := &RuleFit{Rule: rule, IsolationScore: isolationScore(peers, rule.LocationLabels)}
+	rf := &RuleFit{Rule: rule, IsolationScore: isolationScore(peers, rule.LocationLabels), WitnessScore: witnessScore(peers, supportWitness)}
 	for _, p := range peers {
 		rf.Peers = append(rf.Peers, p.Peer)
 		rf.stores = append(rf.stores, p.store)
@@ -486,6 +468,13 @@ func stateScore(region *core.RegionInfo, peerID uint64) int {
 	}
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
+func witnessScore(peers []*fitPeer, supportWitness bool) float64 {
+	var score float64
+	if !supportWitness || len(peers) == 0 {
+		return 0
+	}
+	for _, p := range peers {
+		score += float64(p.store.GetWitnessCount())
+	}
+	return score
 }
