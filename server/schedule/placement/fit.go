@@ -243,10 +243,16 @@ func (w *fitWorker) fitRule(index int) bool {
 	}
 
 	if w.supportWitness && w.rules[index].IsWitness {
+		for i, p := range candidates {
+			log.Error("before shuffle", zap.Int("i", i), zap.Uint64("store_id", p.GetStoreId()), zap.Uint64("peer_id", p.GetId()))
+		}
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		r.Shuffle(len(candidates), func(i, j int) {
 			candidates[i], candidates[j] = candidates[j], candidates[i]
 		})
+		for i, p := range candidates {
+			log.Error("after shuffle", zap.Int("i", i), zap.Uint64("store_id", p.GetStoreId()), zap.Uint64("peer_id", p.GetId()))
+		}
 	}
 
 	return w.fixRuleWithCandidates(candidates, index, count)
