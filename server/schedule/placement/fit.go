@@ -356,6 +356,13 @@ func (w *fitWorker) compareBest(selected []*fitPeer, index int) bool {
 			}
 			return true
 		}
+
+		if rf.Rule.IsWitness {
+			if rand.Float32() < 0.5 {
+				w.bestFit.RuleFits[index] = rf
+				return true
+			}
+		}
 	}
 
 	if rf.Rule.IsWitness {
@@ -477,4 +484,8 @@ func stateScore(region *core.RegionInfo, peerID uint64) int {
 	default:
 		return 2
 	}
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
