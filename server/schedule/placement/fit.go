@@ -17,7 +17,9 @@ package placement
 import (
 	"math"
 	"math/bits"
+	"math/rand"
 	"sort"
+	"time"
 
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/log"
@@ -238,6 +240,13 @@ func (w *fitWorker) fitRule(index int) bool {
 	count := w.rules[index].Count
 	if len(candidates) < count {
 		count = len(candidates)
+	}
+
+	if w.supportWitness && w.rules[index].IsWitness {
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		r.Shuffle(len(candidates), func(i, j int) {
+			candidates[i], candidates[j] = candidates[j], candidates[i]
+		})
 	}
 
 	return w.fixRuleWithCandidates(candidates, index, count)
