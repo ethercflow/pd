@@ -142,9 +142,9 @@ func compareRuleFit(a, b *RuleFit) int {
 		return -1
 	case a.IsolationScore > b.IsolationScore:
 		return 1
-	case a.WitnessScore < b.WitnessScore:
-		return -1
 	case a.WitnessScore > b.WitnessScore:
+		return -1
+	case a.WitnessScore < b.WitnessScore:
 		return 1
 	default:
 		return 0
