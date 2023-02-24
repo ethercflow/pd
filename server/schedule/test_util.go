@@ -15,6 +15,8 @@
 package schedule
 
 import (
+	"fmt"
+
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/tikv/pd/pkg/core"
 	"github.com/tikv/pd/pkg/mock/mockcluster"
@@ -65,6 +67,7 @@ func ApplyOperatorStep(region *core.RegionInfo, op *operator.Operator) *core.Reg
 			}
 			region = region.Clone(core.WithRemoveStorePeer(s.ToStore), core.WithAddPeer(peer))
 		default:
+			fmt.Println("step: ", step.String())
 			panic("Unknown operator step")
 		}
 	}

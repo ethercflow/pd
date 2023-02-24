@@ -218,7 +218,7 @@ func CreateScatterRegionOperator(desc string, ci ClusterInformer, origin *core.R
 	// randomly pick a leader.
 	var ids []uint64
 	for id, peer := range targetPeers {
-		if !core.IsLearner(peer) {
+		if !core.IsLearner(peer) && !core.IsWitness(peer) {
 			ids = append(ids, id)
 		}
 	}
