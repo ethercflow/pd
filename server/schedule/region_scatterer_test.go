@@ -137,8 +137,12 @@ func scatter(re *require.Assertions, numStores, numRegions uint64, useRules bool
 
 	for i := uint64(1); i <= numRegions; i++ {
 		region := tc.GetRegion(i)
+		fmt.Println("region: ", region.GetID())
+		for _, peer := range region.GetPeers() {
+			fmt.Println("peer: ", peer)
+		}
 		if op, _ := scatterer.Scatter(region, ""); op != nil {
-			fmt.Println("op: ", op.Desc())
+			fmt.Println("op: ", op)
 			checkOperator(re, op)
 			ApplyOperator(tc, op)
 		}
