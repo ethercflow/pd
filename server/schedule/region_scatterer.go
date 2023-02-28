@@ -153,9 +153,10 @@ func NewRegionScatterer(ctx context.Context, cluster Cluster, opController *Oper
 type filterFunc func() filter.Filter
 
 type engineContext struct {
-	filterFuncs    []filterFunc
-	selectedPeer   *selectedStores
-	selectedLeader *selectedStores
+	filterFuncs     []filterFunc
+	selectedPeer    *selectedStores
+	selectedLeader  *selectedStores
+	selectedWitness *selectedStores
 }
 
 func newEngineContext(ctx context.Context, filterFuncs ...filterFunc) engineContext {
@@ -163,9 +164,10 @@ func newEngineContext(ctx context.Context, filterFuncs ...filterFunc) engineCont
 		return &filter.StoreStateFilter{ActionScope: regionScatterName, MoveRegion: true, ScatterRegion: true}
 	})
 	return engineContext{
-		filterFuncs:    filterFuncs,
-		selectedPeer:   newSelectedStores(ctx),
-		selectedLeader: newSelectedStores(ctx),
+		filterFuncs:     filterFuncs,
+		selectedPeer:    newSelectedStores(ctx),
+		selectedLeader:  newSelectedStores(ctx),
+		selectedWitness: newSelectedStores(ctx),
 	}
 }
 
@@ -335,14 +337,14 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 				continue
 			}
 			for {
-				candidates := r.selectCandidates(region, oldFit, peer.GetStoreId(), selectedStores, context)
+				candidates := r.selectCandidates(region, oldFit, peer.GetStoreId(), peer.GetIsWitness(), selectedStores, context)
 				newPeer := r.selectStore(group, peer, peer.GetStoreId(), candidates, context)
 				targetPeers[newPeer.GetStoreId()] = newPeer
 				selectedStores[newPeer.GetStoreId()] = struct{}{}
 				// If the selected peer is a peer other than origin peer in this region,
 				// it is considered that the selected peer select itself.
 				// This origin peer re-selects.
-				if _, ok := peers[newPeer.GetStoreId()]; !ok || peer.GetStoreId() == newPeer.GetStoreId() {
+				if other_peer, ok := peers[newPeer.GetStoreId()]; !ok || peer.GetStoreId() == newPeer.GetStoreId() || other_peer.GetIsWitness() != peer.GetIsWitness() {
 					selectedStores[peer.GetStoreId()] = struct{}{}
 					if allowLeader(oldFit, peer) {
 						leaderCandidateStores = append(leaderCandidateStores, newPeer.GetStoreId())
@@ -427,7 +429,7 @@ func isSameDistribution(region *core.RegionInfo, targetPeers map[uint64]*metapb.
 	return region.GetLeader().GetStoreId() == targetLeader
 }
 
-func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *placement.RegionFit, sourceStoreID uint64, selectedStores map[uint64]struct{}, context engineContext) []uint64 {
+func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *placement.RegionFit, sourceStoreID uint64, sourceIsWitness bool, selectedStores map[uint64]struct{}, context engineContext) []uint64 {
 	sourceStore := r.cluster.GetStore(sourceStoreID)
 	if sourceStore == nil {
 		log.Error("failed to get the store", zap.Uint64("store-id", sourceStoreID), errs.ZapError(errs.ErrGetSourceStore))
@@ -445,23 +447,46 @@ func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *plac
 	candidates := make([]uint64, 0)
 	maxStoreTotalCount := uint64(0)
 	minStoreTotalCount := uint64(math.MaxUint64)
-	for _, store := range stores {
-		count := context.selectedPeer.TotalCountByStore(store.GetID())
-		if count > maxStoreTotalCount {
-			maxStoreTotalCount = count
+	if !sourceIsWitness {
+		for _, store := range stores {
+			count := context.selectedPeer.TotalCountByStore(store.GetID())
+			if count > maxStoreTotalCount {
+				maxStoreTotalCount = count
+			}
+			if count < minStoreTotalCount {
+				minStoreTotalCount = count
+			}
 		}
-		if count < minStoreTotalCount {
-			minStoreTotalCount = count
+		for _, store := range stores {
+			storeCount := context.selectedPeer.TotalCountByStore(store.GetID())
+			// If storeCount is equal to the maxStoreTotalCount, we should skip this store as candidate.
+			// If the storeCount are all the same for the whole cluster(maxStoreTotalCount == minStoreTotalCount), any store
+			// could be selected as candidate.
+			if storeCount < maxStoreTotalCount || maxStoreTotalCount == minStoreTotalCount {
+				if filter.Target(r.cluster.GetOpts(), store, filters) {
+					candidates = append(candidates, store.GetID())
+				}
+			}
 		}
-	}
-	for _, store := range stores {
-		storeCount := context.selectedPeer.TotalCountByStore(store.GetID())
-		// If storeCount is equal to the maxStoreTotalCount, we should skip this store as candidate.
-		// If the storeCount are all the same for the whole cluster(maxStoreTotalCount == minStoreTotalCount), any store
-		// could be selected as candidate.
-		if storeCount < maxStoreTotalCount || maxStoreTotalCount == minStoreTotalCount {
-			if filter.Target(r.cluster.GetOpts(), store, filters) {
-				candidates = append(candidates, store.GetID())
+	} else {
+		for _, store := range stores {
+			count := context.selectedWitness.TotalCountByStore(store.GetID())
+			if count > maxStoreTotalCount {
+				maxStoreTotalCount = count
+			}
+			if count < minStoreTotalCount {
+				minStoreTotalCount = count
+			}
+		}
+		for _, store := range stores {
+			storeCount := context.selectedWitness.TotalCountByStore(store.GetID())
+			// If storeCount is equal to the maxStoreTotalCount, we should skip this store as candidate.
+			// If the storeCount are all the same for the whole cluster(maxStoreTotalCount == minStoreTotalCount), any store
+			// could be selected as candidate.
+			if storeCount < maxStoreTotalCount || maxStoreTotalCount == minStoreTotalCount {
+				if filter.Target(r.cluster.GetOpts(), store, filters) {
+					candidates = append(candidates, store.GetID())
+				}
 			}
 		}
 	}
@@ -474,20 +499,40 @@ func (r *RegionScatterer) selectStore(group string, peer *metapb.Peer, sourceSto
 	}
 	var newPeer *metapb.Peer
 	minCount := uint64(math.MaxUint64)
-	for _, storeID := range candidates {
-		count := context.selectedPeer.Get(storeID, group)
-		if count < minCount {
-			minCount = count
-			newPeer = &metapb.Peer{
-				StoreId: storeID,
-				Role:    peer.GetRole(),
+	if !peer.GetIsWitness() {
+		for _, storeID := range candidates {
+			count := context.selectedPeer.Get(storeID, group)
+			if count < minCount {
+				minCount = count
+				newPeer = &metapb.Peer{
+					StoreId: storeID,
+					Role:    peer.GetRole(),
+				}
+			}
+		}
+	} else {
+		for _, storeID := range candidates {
+			count := context.selectedWitness.Get(storeID, group)
+			if count < minCount {
+				minCount = count
+				newPeer = &metapb.Peer{
+					StoreId:   storeID,
+					Role:      peer.GetRole(),
+					IsWitness: true,
+				}
 			}
 		}
 	}
 	// if the source store have the least count, we don't need to scatter this peer
 	for _, storeID := range candidates {
-		if storeID == sourceStoreID && context.selectedPeer.Get(sourceStoreID, group) <= minCount {
-			return peer
+		if !peer.GetIsWitness() {
+			if storeID == sourceStoreID && context.selectedPeer.Get(sourceStoreID, group) <= minCount {
+				return peer
+			}
+		} else {
+			if storeID == sourceStoreID && context.selectedWitness.Get(sourceStoreID, group) <= minCount {
+				return peer
+			}
 		}
 	}
 	if newPeer == nil {
@@ -532,6 +577,9 @@ func (r *RegionScatterer) Put(peers map[uint64]*metapb.Peer, leaderStoreID uint6
 		}
 		if engineFilter.Target(r.cluster.GetOpts(), store).IsOK() {
 			r.ordinaryEngine.selectedPeer.Put(storeID, group)
+			if peer.GetIsWitness() {
+				r.ordinaryEngine.selectedWitness.Put(storeID, group)
+			}
 			scatterDistributionCounter.WithLabelValues(
 				fmt.Sprintf("%v", storeID),
 				fmt.Sprintf("%v", false),
