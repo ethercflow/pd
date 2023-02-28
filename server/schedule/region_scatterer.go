@@ -429,7 +429,7 @@ func allowLeader(fit *placement.RegionFit, peer *metapb.Peer) bool {
 func isSameDistribution(region *core.RegionInfo, targetPeers map[uint64]*metapb.Peer, targetLeader uint64) bool {
 	peers := region.GetPeers()
 	for _, peer := range peers {
-		if _, ok := targetPeers[peer.GetStoreId()]; !ok {
+		if other_peer, ok := targetPeers[peer.GetStoreId()]; !ok || other_peer.GetIsWitness() != peer.GetIsWitness() {
 			return false
 		}
 	}
@@ -463,6 +463,19 @@ func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *plac
 			if count < minStoreTotalCount {
 				minStoreTotalCount = count
 			}
+			var peer *metapb.Peer
+			for _, p := range region.GetPeers() {
+				if p.GetStoreId() == sourceStoreID {
+					peer = p
+					break
+				}
+			}
+			log.Error("in selectCandidates", zap.Uint64("region", region.GetID()),
+				zap.Uint64("peer", peer.GetId()),
+				zap.Uint64("store_id", store.GetID()),
+				zap.Uint64("count", count),
+				zap.Uint64("maxStoreTotalCount", maxStoreTotalCount),
+				zap.Uint64("minStoreTotalCount", minStoreTotalCount))
 		}
 		for _, store := range stores {
 			storeCount := context.selectedPeer.TotalCountByStore(store.GetID())
@@ -475,6 +488,10 @@ func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *plac
 				}
 			}
 		}
+		for _, cand := range candidates {
+			log.Error("in selectCandidates", zap.Uint64("region", region.GetID()),
+				zap.Uint64("cand", cand))
+		}
 	} else {
 		for _, store := range stores {
 			count := context.selectedWitness.TotalCountByStore(store.GetID())
@@ -484,6 +501,19 @@ func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *plac
 			if count < minStoreTotalCount {
 				minStoreTotalCount = count
 			}
+			var peer *metapb.Peer
+			for _, p := range region.GetPeers() {
+				if p.GetStoreId() == sourceStoreID {
+					peer = p
+					break
+				}
+			}
+			log.Error("in selectCandidates witness", zap.Uint64("region", region.GetID()),
+				zap.Uint64("peer", peer.GetId()),
+				zap.Uint64("store_id", store.GetID()),
+				zap.Uint64("count", count),
+				zap.Uint64("maxStoreTotalCount", maxStoreTotalCount),
+				zap.Uint64("minStoreTotalCount", minStoreTotalCount))
 		}
 		for _, store := range stores {
 			storeCount := context.selectedWitness.TotalCountByStore(store.GetID())
@@ -495,6 +525,10 @@ func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *plac
 					candidates = append(candidates, store.GetID())
 				}
 			}
+		}
+		for _, cand := range candidates {
+			log.Error("in selectCandidates witness", zap.Uint64("region", region.GetID()),
+				zap.Uint64("cand", cand))
 		}
 	}
 	return candidates
