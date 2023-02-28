@@ -338,7 +338,7 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 			}
 			for {
 				candidates := r.selectCandidates(region, oldFit, peer.GetStoreId(), peer.GetIsWitness(), selectedStores, context)
-				newPeer := r.selectStore(group, peer, peer.GetStoreId(), candidates, context)
+				newPeer := r.selectStore(group, region, peer, peer.GetStoreId(), candidates, context)
 				targetPeers[newPeer.GetStoreId()] = newPeer
 				selectedStores[newPeer.GetStoreId()] = struct{}{}
 				// If the selected peer is a peer other than origin peer in this region,
@@ -388,6 +388,11 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 		r.Put(targetPeers, targetLeader, group)
 		return nil
 	}
+
+	for _, p := range ordinaryPeers {
+		log.Error()
+	}
+
 	op, err := operator.CreateScatterRegionOperator("scatter-region", r.cluster, region, targetPeers, targetLeader)
 	if err != nil {
 		scatterFailCounter.Inc()
@@ -534,7 +539,7 @@ func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *plac
 	return candidates
 }
 
-func (r *RegionScatterer) selectStore(group string, peer *metapb.Peer, sourceStoreID uint64, candidates []uint64, context engineContext) *metapb.Peer {
+func (r *RegionScatterer) selectStore(group string, region *core.RegionInfo, peer *metapb.Peer, sourceStoreID uint64, candidates []uint64, context engineContext) *metapb.Peer {
 	if len(candidates) < 1 {
 		return peer
 	}
@@ -549,6 +554,8 @@ func (r *RegionScatterer) selectStore(group string, peer *metapb.Peer, sourceSto
 					StoreId: storeID,
 					Role:    peer.GetRole(),
 				}
+				log.Error("in selectStore", zap.Uint64("region", region.GetID()), zap.Uint64("peer", peer.GetId()),
+					zap.Uint64("sourceStoreID", sourceStoreID), zap.Uint64("newStoreID", storeID))
 			}
 		}
 	} else {
@@ -561,6 +568,8 @@ func (r *RegionScatterer) selectStore(group string, peer *metapb.Peer, sourceSto
 					Role:      peer.GetRole(),
 					IsWitness: true,
 				}
+				log.Error("in selectStore witness", zap.Uint64("region", region.GetID()), zap.Uint64("peer", peer.GetId()),
+					zap.Uint64("sourceStoreID", sourceStoreID), zap.Uint64("newStoreID", storeID))
 			}
 		}
 	}
@@ -568,10 +577,14 @@ func (r *RegionScatterer) selectStore(group string, peer *metapb.Peer, sourceSto
 	for _, storeID := range candidates {
 		if !peer.GetIsWitness() {
 			if storeID == sourceStoreID && context.selectedPeer.Get(sourceStoreID, group) <= minCount {
+				log.Error("in selectStore no need to scatter", zap.Uint64("region", region.GetID()), zap.Uint64("peer", peer.GetId()),
+					zap.Uint64("sourceStoreID", sourceStoreID))
 				return peer
 			}
 		} else {
 			if storeID == sourceStoreID && context.selectedWitness.Get(sourceStoreID, group) <= minCount {
+				log.Error("in selectStore witness no need to scatter", zap.Uint64("region", region.GetID()), zap.Uint64("peer", peer.GetId()),
+					zap.Uint64("sourceStoreID", sourceStoreID))
 				return peer
 			}
 		}
