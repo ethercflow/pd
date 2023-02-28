@@ -344,11 +344,18 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 				// If the selected peer is a peer other than origin peer in this region,
 				// it is considered that the selected peer select itself.
 				// This origin peer re-selects.
-				if other_peer, ok := peers[newPeer.GetStoreId()]; !ok || peer.GetStoreId() == newPeer.GetStoreId() || other_peer.GetIsWitness() != peer.GetIsWitness() {
+				other_peer, ok := peers[newPeer.GetStoreId()]
+				if !ok || peer.GetStoreId() == newPeer.GetStoreId() {
 					selectedStores[peer.GetStoreId()] = struct{}{}
 					if allowLeader(oldFit, peer) {
 						leaderCandidateStores = append(leaderCandidateStores, newPeer.GetStoreId())
 					}
+					break
+				}
+				if ok && (!other_peer.GetIsWitness() && peer.GetIsWitness()) {
+					selectedStores[peer.GetStoreId()] = struct{}{}
+					other_peer.StoreId = peer.GetStoreId()
+					targetPeers[peer.GetStoreId()] = other_peer
 					break
 				}
 			}
