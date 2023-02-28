@@ -394,10 +394,12 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 	}
 
 	for _, p := range ordinaryPeers {
-		log.Error("in scatterRegion or", zap.Uint64("region", region.GetID()), zap.Uint64("peer_id", p.GetId()), zap.Uint64("peer_store_id", p.GetStoreId()))
+		log.Error("in scatterRegion orignal", zap.Uint64("region", region.GetID()), zap.Uint64("peer_id", p.GetId()), zap.Uint64("peer_store_id", p.GetStoreId()),
+			zap.Bool("is_leader", region.GetLeader().GetId() == p.GetId()), zap.Bool("is_witness", p.GetIsWitness()))
 	}
 	for _, p := range targetPeers {
-		log.Error("in scatterRegion ta", zap.Uint64("region", region.GetID()), zap.Uint64("peer_id", p.GetId()), zap.Uint64("peer_store_id", p.GetStoreId()))
+		log.Error("in scatterRegion target", zap.Uint64("region", region.GetID()), zap.Uint64("peer_id", p.GetId()), zap.Uint64("peer_store_id", p.GetStoreId()),
+			zap.Bool("is_leader", region.GetLeader().GetId() == p.GetId()), zap.Bool("is_witness", p.GetIsWitness()))
 	}
 
 	op, err := operator.CreateScatterRegionOperator("scatter-region", r.cluster, region, targetPeers, targetLeader)
@@ -485,6 +487,8 @@ func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *plac
 			log.Error("in selectCandidates", zap.Uint64("region", region.GetID()),
 				zap.Uint64("peer", peer.GetId()),
 				zap.Uint64("store_id", store.GetID()),
+				zap.Bool("is_leader", region.GetLeader().GetId() == peer.GetId()),
+				zap.Bool("is_witness", peer.GetIsWitness()),
 				zap.Uint64("count", count),
 				zap.Uint64("maxStoreTotalCount", maxStoreTotalCount),
 				zap.Uint64("minStoreTotalCount", minStoreTotalCount))
@@ -523,6 +527,8 @@ func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *plac
 			log.Error("in selectCandidates witness", zap.Uint64("region", region.GetID()),
 				zap.Uint64("peer", peer.GetId()),
 				zap.Uint64("store_id", store.GetID()),
+				zap.Bool("is_leader", region.GetLeader().GetId() == peer.GetId()),
+				zap.Bool("is_witness", peer.GetIsWitness()),
 				zap.Uint64("count", count),
 				zap.Uint64("maxStoreTotalCount", maxStoreTotalCount),
 				zap.Uint64("minStoreTotalCount", minStoreTotalCount))
@@ -562,6 +568,8 @@ func (r *RegionScatterer) selectStore(group string, region *core.RegionInfo, pee
 					Role:    peer.GetRole(),
 				}
 				log.Error("in selectStore", zap.Uint64("region", region.GetID()), zap.Uint64("peer", peer.GetId()),
+					zap.Bool("is_leader", region.GetLeader().GetId() == peer.GetId()),
+					zap.Bool("is_witness", peer.GetIsWitness()),
 					zap.Uint64("sourceStoreID", sourceStoreID), zap.Uint64("newStoreID", storeID))
 			}
 		}
@@ -576,6 +584,8 @@ func (r *RegionScatterer) selectStore(group string, region *core.RegionInfo, pee
 					IsWitness: true,
 				}
 				log.Error("in selectStore witness", zap.Uint64("region", region.GetID()), zap.Uint64("peer", peer.GetId()),
+					zap.Bool("is_leader", region.GetLeader().GetId() == peer.GetId()),
+					zap.Bool("is_witness", peer.GetIsWitness()),
 					zap.Uint64("sourceStoreID", sourceStoreID), zap.Uint64("newStoreID", storeID))
 			}
 		}
@@ -585,12 +595,16 @@ func (r *RegionScatterer) selectStore(group string, region *core.RegionInfo, pee
 		if !peer.GetIsWitness() {
 			if storeID == sourceStoreID && context.selectedPeer.Get(sourceStoreID, group) <= minCount {
 				log.Error("in selectStore no need to scatter", zap.Uint64("region", region.GetID()), zap.Uint64("peer", peer.GetId()),
+					zap.Bool("is_leader", region.GetLeader().GetId() == peer.GetId()),
+					zap.Bool("is_witness", peer.GetIsWitness()),
 					zap.Uint64("sourceStoreID", sourceStoreID))
 				return peer
 			}
 		} else {
 			if storeID == sourceStoreID && context.selectedWitness.Get(sourceStoreID, group) <= minCount {
 				log.Error("in selectStore witness no need to scatter", zap.Uint64("region", region.GetID()), zap.Uint64("peer", peer.GetId()),
+					zap.Bool("is_leader", region.GetLeader().GetId() == peer.GetId()),
+					zap.Bool("is_witness", peer.GetIsWitness()),
 					zap.Uint64("sourceStoreID", sourceStoreID))
 				return peer
 			}
