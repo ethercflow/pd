@@ -398,6 +398,9 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 
 	scatterWithSameEngine(ordinaryPeers, ordinaryPeersArr, r.ordinaryEngine)
 	deleteSlice := func(original []uint64, toDelete []uint64) []uint64 {
+		if len(toDelete) == 0 {
+			return original
+		}
 		result := make([]uint64, 0)
 		i, j := 0, 0
 		for i < len(original) {
