@@ -336,6 +336,7 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 		log.Error("before sort", zap.String("peer", peer.String()))
 		ordinaryPeersArr = append(ordinaryPeersArr, peer)
 	}
+	log.Error("before sort", zap.Int("len(oridianryPeersArr)", len(ordinaryPeersArr)))
 	sortByWitness(ordinaryPeersArr)
 	for _, peer := range ordinaryPeersArr {
 		log.Error("after sort", zap.String("peer", peer.String()))
