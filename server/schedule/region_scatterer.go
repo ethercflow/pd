@@ -331,7 +331,7 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 		})
 	}
 
-	ordinaryPeersArr := make([]*metapb.Peer, len(region.GetPeers()))
+	ordinaryPeersArr := make([]*metapb.Peer, 0, len(region.GetPeers()))
 	for _, peer := range ordinaryPeers {
 		log.Error("before sort", zap.String("peer", peer.String()))
 		ordinaryPeersArr = append(ordinaryPeersArr, peer)
@@ -403,7 +403,7 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 			r.specialEngines.Store(engine, ctx)
 		}
 
-		peersArr := make([]*metapb.Peer, len(peers))
+		peersArr := make([]*metapb.Peer, 0, len(peers))
 		for _, peer := range peers {
 			peersArr = append(peersArr, peer)
 		}
