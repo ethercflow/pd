@@ -372,24 +372,23 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 					}
 					break
 				}
-				if ok && (!other_peer.GetIsWitness() && peer.GetIsWitness()) {
+				if ok && (!other_peer.GetIsWitness() && peer.GetIsWitness()) && (region.GetLeader().GetId() != other_peer.GetId()) {
 					// let old voter to witness
 					newPeer.Id = other_peer.GetId()
 					// let old witness to non-witness
-					other_new_peer := &metapb.Peer{
+					otherNewPeer := &metapb.Peer{
 						StoreId:   peer.GetStoreId(),
 						Role:      peer.GetRole(),
 						IsWitness: false,
 						Id:        peer.GetId(),
 					}
-					targetPeers[peer.GetStoreId()] = other_new_peer
+					targetPeers[peer.GetStoreId()] = otherNewPeer
 					shouldnotleader = append(shouldnotleader, newPeer.GetStoreId())
 					leaderCandidateStores = append(leaderCandidateStores, peer.GetId())
 					log.Error("in scatterRegion", zap.Uint64("region", region.GetID()),
-						zap.Uint64("witness_id", peer.GetId()), zap.Uint64("witness_old_store_id", peer.GetStoreId()),
-						zap.Uint64("witness_new_store_id", newPeer.GetStoreId()),
-						zap.Uint64("other_peer_new_store_id", other_peer.GetStoreId()),
-						zap.Uint64("other_peer_id", other_peer.GetId()))
+						zap.String("peer", peer.String()),
+						zap.String("new_peer", newPeer.String()),
+						zap.String("other_new_peer", otherNewPeer.String()))
 					break
 				}
 			}
