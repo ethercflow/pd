@@ -364,7 +364,7 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 				// If the selected peer is a peer other than origin peer in this region,
 				// it is considered that the selected peer select itself.
 				// This origin peer re-selects.
-				other_peer, ok := peers[newPeer.GetStoreId()]
+				existPeer, ok := peers[newPeer.GetStoreId()]
 				if !ok || peer.GetStoreId() == newPeer.GetStoreId() {
 					selectedStores[peer.GetStoreId()] = struct{}{}
 					if allowLeader(oldFit, peer) {
@@ -372,9 +372,9 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 					}
 					break
 				}
-				if ok && (!other_peer.GetIsWitness() && peer.GetIsWitness()) && (region.GetLeader().GetId() != other_peer.GetId()) {
+				if ok && (!existPeer.GetIsWitness() && peer.GetIsWitness()) && (region.GetLeader().GetId() != existPeer.GetId()) {
 					// let old voter to witness
-					newPeer.Id = other_peer.GetId()
+					newPeer.Id = existPeer.GetId()
 					// let old witness to non-witness
 					otherNewPeer := &metapb.Peer{
 						StoreId:   peer.GetStoreId(),
@@ -426,7 +426,16 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 		return result
 	}
 
+	for _, s := range shouldnotleader {
+		log.Error("shouldnot leader sid", zap.Uint64("store_id", s))
+	}
+	for _, s := range leaderCandidateStores {
+		log.Error("before delete sid", zap.Uint64("store_id", s))
+	}
 	leaderCandidateStores = deleteSlice(leaderCandidateStores, shouldnotleader)
+	for _, s := range leaderCandidateStores {
+		log.Error("after delete sid", zap.Uint64("store_id", s))
+	}
 
 	// FIXME: target leader only considers the ordinary stores, maybe we need to consider the
 	// special engine stores if the engine supports to become a leader. But now there is only
