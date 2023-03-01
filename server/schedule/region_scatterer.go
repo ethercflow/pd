@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -324,11 +325,23 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 		}
 	}
 
-	targetPeers := make(map[uint64]*metapb.Peer, len(region.GetPeers()))                  // StoreID -> Peer
-	selectedStores := make(map[uint64]struct{}, len(region.GetPeers()))                   // selected StoreID set
-	leaderCandidateStores := make([]uint64, 0, len(region.GetPeers()))                    // StoreID allowed to become Leader
-	scatterWithSameEngine := func(peers map[uint64]*metapb.Peer, context engineContext) { // peers: StoreID -> Peer
-		for _, peer := range peers {
+	sortByWitness := func(arr []*metapb.Peer) {
+		sort.Slice(arr, func(i, j int) bool {
+			return arr[i].GetIsWitness() && !arr[j].GetIsWitness()
+		})
+	}
+
+	ordinaryPeersArr := make([]*metapb.Peer, len(region.GetPeers()))
+	for _, peer := range ordinaryPeers {
+		ordinaryPeersArr = append(ordinaryPeersArr, peer)
+	}
+	sortByWitness(ordinaryPeersArr)
+
+	targetPeers := make(map[uint64]*metapb.Peer, len(region.GetPeers()))                                           // StoreID -> Peer
+	selectedStores := make(map[uint64]struct{}, len(region.GetPeers()))                                            // selected StoreID set
+	leaderCandidateStores := make([]uint64, 0, len(region.GetPeers()))                                             // StoreID allowed to become Leader
+	scatterWithSameEngine := func(peers map[uint64]*metapb.Peer, peersArr []*metapb.Peer, context engineContext) { // peers: StoreID -> Peer
+		for _, peer := range peersArr {
 			if _, ok := selectedStores[peer.GetStoreId()]; ok {
 				if allowLeader(oldFit, peer) {
 					leaderCandidateStores = append(leaderCandidateStores, peer.GetStoreId())
@@ -365,7 +378,7 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 		}
 	}
 
-	scatterWithSameEngine(ordinaryPeers, r.ordinaryEngine)
+	scatterWithSameEngine(ordinaryPeers, ordinaryPeersArr, r.ordinaryEngine)
 	// FIXME: target leader only considers the ordinary stores, maybe we need to consider the
 	// special engine stores if the engine supports to become a leader. But now there is only
 	// one engine, tiflash, which does not support the leader, so don't consider it for now.
@@ -383,7 +396,12 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 			})
 			r.specialEngines.Store(engine, ctx)
 		}
-		scatterWithSameEngine(peers, ctx.(engineContext))
+
+		peersArr := make([]*metapb.Peer, len(peers))
+		for _, peer := range peers {
+			peersArr = append(peersArr, peer)
+		}
+		scatterWithSameEngine(peers, peersArr, ctx.(engineContext))
 	}
 
 	if isSameDistribution(region, targetPeers, targetLeader) {
