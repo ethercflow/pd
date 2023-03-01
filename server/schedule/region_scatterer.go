@@ -350,6 +350,7 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 				continue
 			}
 			for {
+				log.Error("before selectCandidates", zap.String("peer", peer.String()))
 				candidates := r.selectCandidates(region, oldFit, peer.GetStoreId(), peer.GetIsWitness(), selectedStores, context)
 				newPeer := r.selectStore(group, region, peer, peer.GetStoreId(), candidates, context)
 				targetPeers[newPeer.GetStoreId()] = newPeer
