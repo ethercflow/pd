@@ -353,13 +353,12 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 					break
 				}
 				if ok && (!other_peer.GetIsWitness() && peer.GetIsWitness()) {
-					selectedStores[peer.GetStoreId()] = struct{}{}
-					other_peer.StoreId = peer.GetStoreId()
-					targetPeers[peer.GetStoreId()] = other_peer
+					newPeer.Id = other_peer.GetId()
 					log.Error("in scatterRegion", zap.Uint64("region", region.GetID()),
 						zap.Uint64("witness_id", peer.GetId()), zap.Uint64("witness_old_store_id", peer.GetStoreId()),
 						zap.Uint64("witness_new_store_id", newPeer.GetStoreId()),
-						zap.Uint64("other_peer_new_store_id", other_peer.GetStoreId()))
+						zap.Uint64("other_peer_new_store_id", other_peer.GetStoreId()),
+						zap.Uint64("other_peer_id", other_peer.GetId()))
 					break
 				}
 			}
