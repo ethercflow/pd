@@ -384,7 +384,7 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 					}
 					targetPeers[peer.GetStoreId()] = otherNewPeer
 					shouldnotleader = append(shouldnotleader, newPeer.GetStoreId())
-					leaderCandidateStores = append(leaderCandidateStores, peer.GetId())
+					leaderCandidateStores = append(leaderCandidateStores, peer.GetStoreId())
 					log.Error("in scatterRegion", zap.Uint64("region", region.GetID()),
 						zap.String("peer", peer.String()),
 						zap.String("new_peer", newPeer.String()),
