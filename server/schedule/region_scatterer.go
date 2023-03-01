@@ -342,9 +342,10 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 		log.Error("after sort", zap.String("peer", peer.String()))
 	}
 
-	targetPeers := make(map[uint64]*metapb.Peer, len(region.GetPeers()))                                           // StoreID -> Peer
-	selectedStores := make(map[uint64]struct{}, len(region.GetPeers()))                                            // selected StoreID set
-	leaderCandidateStores := make([]uint64, 0, len(region.GetPeers()))                                             // StoreID allowed to become Leader
+	targetPeers := make(map[uint64]*metapb.Peer, len(region.GetPeers())) // StoreID -> Peer
+	selectedStores := make(map[uint64]struct{}, len(region.GetPeers()))  // selected StoreID set
+	leaderCandidateStores := make([]uint64, 0, len(region.GetPeers()))   // StoreID allowed to become Leader
+	shouldnotleader := make([]uint64, 0, len(region.GetPeers()))
 	scatterWithSameEngine := func(peers map[uint64]*metapb.Peer, peersArr []*metapb.Peer, context engineContext) { // peers: StoreID -> Peer
 		for _, peer := range peersArr {
 			if _, ok := selectedStores[peer.GetStoreId()]; ok {
@@ -372,8 +373,18 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 					break
 				}
 				if ok && (!other_peer.GetIsWitness() && peer.GetIsWitness()) {
+					// let old voter to witness
 					newPeer.Id = other_peer.GetId()
-					other_peer.StoreId = peer.GetStoreId()
+					// let old witness to non-witness
+					other_new_peer := &metapb.Peer{
+						StoreId:   peer.GetStoreId(),
+						Role:      peer.GetRole(),
+						IsWitness: false,
+						Id:        peer.GetId(),
+					}
+					targetPeers[peer.GetStoreId()] = other_new_peer
+					shouldnotleader = append(shouldnotleader, newPeer.GetStoreId())
+					leaderCandidateStores = append(leaderCandidateStores, peer.GetId())
 					log.Error("in scatterRegion", zap.Uint64("region", region.GetID()),
 						zap.Uint64("witness_id", peer.GetId()), zap.Uint64("witness_old_store_id", peer.GetStoreId()),
 						zap.Uint64("witness_new_store_id", newPeer.GetStoreId()),
@@ -386,6 +397,35 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 	}
 
 	scatterWithSameEngine(ordinaryPeers, ordinaryPeersArr, r.ordinaryEngine)
+	deleteSlice := func(original []uint64, toDelete []uint64) []uint64 {
+		result := make([]uint64, 0)
+		i, j := 0, 0
+		for i < len(original) {
+			if original[i] != toDelete[j] {
+				result = append(result, original[i])
+				i++
+			} else {
+				// match found, start sub loop
+				subI, subJ := i, j
+				for subJ < len(toDelete) && subI < len(original) && original[subI] == toDelete[subJ] {
+					subI++
+					subJ++
+				}
+				if subJ == len(toDelete) {
+					i = subI
+					j = 0
+				} else {
+					result = append(result, original[i])
+					i++
+					j = 0
+				}
+			}
+		}
+		return result
+	}
+
+	leaderCandidateStores = deleteSlice(leaderCandidateStores, shouldnotleader)
+
 	// FIXME: target leader only considers the ordinary stores, maybe we need to consider the
 	// special engine stores if the engine supports to become a leader. But now there is only
 	// one engine, tiflash, which does not support the leader, so don't consider it for now.
