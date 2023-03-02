@@ -20,10 +20,12 @@ import (
 
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
+	"github.com/pingcap/log"
 	"github.com/stretchr/testify/suite"
 	"github.com/tikv/pd/pkg/core"
 	"github.com/tikv/pd/pkg/mock/mockcluster"
 	"github.com/tikv/pd/server/config"
+	"go.uber.org/zap"
 )
 
 type operatorBuilderTestSuite struct {
@@ -611,4 +613,87 @@ func (suite *operatorBuilderTestSuite) TestTargetUnhealthyPeer() {
 	builder = NewBuilder("test", suite.cluster, region)
 	builder.SetLeader(2)
 	suite.Error(builder.err)
+}
+
+func (suite *operatorBuilderTestSuite) TestBuild2() {
+	type testCase struct {
+		name              string
+		useJointConsensus bool
+		originPeers       []*metapb.Peer // first is leader
+		targetPeers       []*metapb.Peer // first is leader
+		kind              OpKind
+		steps             []OpStep // empty means error
+	}
+	testCases := []testCase{
+		{
+			"test",
+			true,
+			[]*metapb.Peer{{Id: 223, StoreId: 1, IsWitness: true}, {Id: 225, StoreId: 4}, {Id: 224, StoreId: 5}},
+			[]*metapb.Peer{{Id: 223, StoreId: 1}, {Id: 225, StoreId: 4, IsWitness: true}, {Id: 224, StoreId: 5}},
+			OpLeader | OpRegion | OpAdmin,
+			[]OpStep{
+				AddLearner{ToStore: 4},
+				PromoteLearner{ToStore: 4},
+				RemovePeer{FromStore: 2},
+				AddLearner{ToStore: 5},
+				RemovePeer{FromStore: 3},
+				TransferLeader{FromStore: 1, ToStore: 4},
+				RemovePeer{FromStore: 1},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		suite.T().Log(testCase.name)
+		region := core.NewRegionInfo(&metapb.Region{Id: 218, Peers: testCase.originPeers}, testCase.originPeers[2])
+		builder := NewBuilder("test", suite.cluster, region)
+		builder.useJointConsensus = testCase.useJointConsensus
+		m := make(map[uint64]*metapb.Peer)
+		for _, p := range testCase.targetPeers {
+			m[p.GetStoreId()] = p
+		}
+		builder.SetPeers(m).SetLeader(testCase.targetPeers[0].GetStoreId())
+		op, err := builder.Build(0)
+		if len(testCase.steps) == 0 {
+			suite.Error(err)
+			continue
+		}
+		suite.NoError(err)
+		// suite.Equal(testCase.kind, op.Kind())
+		// suite.Len(testCase.steps, op.Len())
+		log.Info("op", zap.String("op", op.String()))
+		for i := 0; i < op.Len(); i++ {
+			switch step := op.Step(i).(type) {
+			case TransferLeader:
+				suite.Equal(testCase.steps[i].(TransferLeader).FromStore, step.FromStore)
+				suite.Equal(testCase.steps[i].(TransferLeader).ToStore, step.ToStore)
+			case AddPeer:
+				suite.Equal(testCase.steps[i].(AddPeer).ToStore, step.ToStore)
+			case RemovePeer:
+				suite.Equal(testCase.steps[i].(RemovePeer).FromStore, step.FromStore)
+			case AddLearner:
+				suite.Equal(testCase.steps[i].(AddLearner).ToStore, step.ToStore)
+			case PromoteLearner:
+				suite.Equal(testCase.steps[i].(PromoteLearner).ToStore, step.ToStore)
+			case ChangePeerV2Enter:
+				suite.Len(step.PromoteLearners, len(testCase.steps[i].(ChangePeerV2Enter).PromoteLearners))
+				suite.Len(step.DemoteVoters, len(testCase.steps[i].(ChangePeerV2Enter).DemoteVoters))
+				for j, p := range testCase.steps[i].(ChangePeerV2Enter).PromoteLearners {
+					suite.Equal(p.ToStore, step.PromoteLearners[j].ToStore)
+				}
+				for j, d := range testCase.steps[i].(ChangePeerV2Enter).DemoteVoters {
+					suite.Equal(d.ToStore, step.DemoteVoters[j].ToStore)
+				}
+			case ChangePeerV2Leave:
+				suite.Len(step.PromoteLearners, len(testCase.steps[i].(ChangePeerV2Leave).PromoteLearners))
+				suite.Len(step.DemoteVoters, len(testCase.steps[i].(ChangePeerV2Leave).DemoteVoters))
+				for j, p := range testCase.steps[i].(ChangePeerV2Leave).PromoteLearners {
+					suite.Equal(p.ToStore, step.PromoteLearners[j].ToStore)
+				}
+				for j, d := range testCase.steps[i].(ChangePeerV2Leave).DemoteVoters {
+					suite.Equal(d.ToStore, step.DemoteVoters[j].ToStore)
+				}
+			}
+		}
+	}
 }

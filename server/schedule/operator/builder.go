@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/metapb"
+	"github.com/pingcap/log"
 	"github.com/tikv/pd/pkg/core"
 	"github.com/tikv/pd/pkg/id"
 	"github.com/tikv/pd/pkg/utils/typeutil"
@@ -27,6 +28,7 @@ import (
 	"github.com/tikv/pd/server/config"
 	"github.com/tikv/pd/server/schedule/filter"
 	"github.com/tikv/pd/server/schedule/placement"
+	"go.uber.org/zap"
 )
 
 // ClusterInformer provides the necessary information for building operator.
@@ -304,6 +306,7 @@ func (b *Builder) SetLeader(storeID uint64) *Builder {
 	} else {
 		b.targetLeaderStoreID = storeID
 	}
+	log.Info("in SetLeader", zap.Uint64("targetLeaderStore", b.targetLeaderStoreID))
 	return b
 }
 
@@ -429,6 +432,13 @@ func (b *Builder) prepareBuild() (string, error) {
 	b.toNonWitness = newPeersMap()
 	b.toPromoteNonWitness = newPeersMap()
 
+	for _, peer := range b.originPeers {
+		log.Info("origin", zap.String("peer", peer.String()))
+	}
+	for _, peer := range b.targetPeers {
+		log.Info("target", zap.String("peer", peer.String()))
+	}
+
 	voterCount := 0
 	for _, peer := range b.targetPeers {
 		if !core.IsLearner(peer) {
@@ -512,8 +522,26 @@ func (b *Builder) prepareBuild() (string, error) {
 	}
 
 	// If the target leader does not exist or is a Learner, the target is cancelled.
-	if peer, ok := b.targetPeers[b.targetLeaderStoreID]; !ok || core.IsLearner(peer) {
+	peer, ok := b.targetPeers[b.targetLeaderStoreID]
+	if !ok {
+		log.Info("targetLeaderStore reset to 0")
 		b.targetLeaderStoreID = 0
+	} else {
+		if core.IsLearner(peer) {
+			find := false
+			for _, p := range b.toPromoteNonWitness {
+				if p.GetId() == peer.GetId() {
+					find = true
+					break
+				}
+			}
+			if !find {
+				if ok {
+					log.Info("target leader?", zap.String("peer", peer.String()))
+				}
+				b.targetLeaderStoreID = 0
+			}
+		}
 	}
 
 	b.currentPeers, b.currentLeaderStoreID = b.originPeers.Copy(), b.originLeaderStoreID
@@ -607,17 +635,48 @@ func (b *Builder) buildStepsWithJointConsensus(kind OpKind) (OpKind, error) {
 		}
 	}
 
-	if targetLeaderBefore, ok := b.originPeers[b.targetLeaderStoreID]; ok && !core.IsLearner(targetLeaderBefore) {
+	if targetLeaderBefore, ok := b.originPeers[b.targetLeaderStoreID]; ok && !core.IsLearner(targetLeaderBefore) && !core.IsWitness(targetLeaderBefore) {
+		log.Info("inbuild", zap.String("targetLeaderBefore", targetLeaderBefore.String()))
 		// target leader is a voter in `originPeers`, transfer leader first.
 		if b.originLeaderStoreID != b.targetLeaderStoreID {
+			log.Info("inbuild tranfer leader first",
+				zap.Uint64("originLeaderStoreID", b.originLeaderStoreID),
+				zap.Uint64("targetLeaderStoreID", b.originLeaderStoreID))
 			b.execTransferLeader(b.targetLeaderStoreID, b.targetLeaderStoreIDs)
 			kind |= OpLeader
 		}
 		b.execChangePeerV2(true, false)
+
+		b.execBatchSwitchWitnesses()
+
+		if len(b.toPromoteNonWitness) > 0 {
+			for _, promote := range b.toPromoteNonWitness.IDs() {
+				peer := b.toPromoteNonWitness[promote]
+				peer.IsWitness = false
+				b.toPromote.Set(peer)
+				kind |= OpRegion
+			}
+			b.execChangePeerV2(true, false)
+		}
 	} else if originLeaderAfter, ok := b.targetPeers[b.originLeaderStoreID]; b.originLeaderStoreID == 0 ||
-		(ok && !core.IsLearner(originLeaderAfter)) {
+		(ok && !core.IsLearner(originLeaderAfter) && !core.IsWitness(originLeaderAfter)) {
 		// origin leader is none or a voter in `targetPeers`, change peers first.
+		log.Info("inbuild change peer first",
+			zap.Uint64("originLeaderStoreID", b.originLeaderStoreID),
+			zap.Uint64("targetLeaderStoreID", b.originLeaderStoreID))
 		b.execChangePeerV2(true, false)
+
+		b.execBatchSwitchWitnesses()
+
+		if len(b.toPromoteNonWitness) > 0 {
+			for _, promote := range b.toPromoteNonWitness.IDs() {
+				peer := b.toPromoteNonWitness[promote]
+				peer.IsWitness = false
+				b.toPromote.Set(peer)
+				kind |= OpRegion
+			}
+			b.execChangePeerV2(true, false)
+		}
 		if b.originLeaderStoreID != b.targetLeaderStoreID {
 			b.execTransferLeader(b.targetLeaderStoreID, b.targetLeaderStoreIDs)
 			kind |= OpLeader
@@ -626,6 +685,18 @@ func (b *Builder) buildStepsWithJointConsensus(kind OpKind) (OpKind, error) {
 		// both demote origin leader and promote target leader, transfer leader in joint state.
 		b.execChangePeerV2(true, true)
 		kind |= OpLeader
+
+		b.execBatchSwitchWitnesses()
+
+		if len(b.toPromoteNonWitness) > 0 {
+			for _, promote := range b.toPromoteNonWitness.IDs() {
+				peer := b.toPromoteNonWitness[promote]
+				peer.IsWitness = false
+				b.toPromote.Set(peer)
+				kind |= OpRegion
+			}
+			b.execChangePeerV2(true, false)
+		}
 	}
 
 	// Finally, remove all the peers as Learner
@@ -633,17 +704,7 @@ func (b *Builder) buildStepsWithJointConsensus(kind OpKind) (OpKind, error) {
 		b.execRemovePeer(b.toRemove[remove])
 		kind |= OpRegion
 	}
-
-	b.execBatchSwitchWitnesses()
-
-	for _, promote := range b.toPromoteNonWitness.IDs() {
-		peer := b.toPromoteNonWitness[promote]
-		peer.IsWitness = false
-		b.toPromote.Set(peer)
-		kind |= OpRegion
-	}
 	b.toPromoteNonWitness = newPeersMap()
-	b.execChangePeerV2(true, false)
 
 	return kind, nil
 }
@@ -895,11 +956,23 @@ func (b *Builder) execBatchSwitchWitnesses() {
 func (b *Builder) allowLeader(peer *metapb.Peer, ignoreClusterLimit bool) bool {
 	// these peer roles are not allowed to become leader.
 	switch peer.GetRole() {
-	case metapb.PeerRole_Learner, metapb.PeerRole_DemotingVoter:
+	case metapb.PeerRole_Learner:
+		for _, p := range b.toPromoteNonWitness {
+			if p.GetId() == peer.GetId() {
+				return true
+			}
+		}
+		return false
+	case metapb.PeerRole_DemotingVoter:
 		return false
 	}
 
 	if peer.IsWitness {
+		for _, p := range b.toPromoteNonWitness {
+			if p.GetId() == peer.GetId() {
+				return true
+			}
+		}
 		return false
 	}
 
