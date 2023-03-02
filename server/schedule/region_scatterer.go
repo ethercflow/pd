@@ -333,13 +333,13 @@ func (r *RegionScatterer) scatterRegion(region *core.RegionInfo, group string) *
 
 	ordinaryPeersArr := make([]*metapb.Peer, 0, len(region.GetPeers()))
 	for _, peer := range ordinaryPeers {
-		log.Error("before sort", zap.String("peer", peer.String()))
+		log.Error("before sort", zap.String("peer", peer.String()), zap.Bool("is_leader", region.GetLeader().GetId() == peer.GetId()))
 		ordinaryPeersArr = append(ordinaryPeersArr, peer)
 	}
 	log.Error("before sort", zap.Int("len(oridianryPeersArr)", len(ordinaryPeersArr)))
 	sortByWitness(ordinaryPeersArr)
 	for _, peer := range ordinaryPeersArr {
-		log.Error("after sort", zap.String("peer", peer.String()))
+		log.Error("after sort", zap.String("peer", peer.String()), zap.Bool("is_leader", region.GetLeader().GetId() == peer.GetId()))
 	}
 
 	targetPeers := make(map[uint64]*metapb.Peer, len(region.GetPeers())) // StoreID -> Peer
