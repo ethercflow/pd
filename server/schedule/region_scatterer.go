@@ -538,7 +538,12 @@ func (r *RegionScatterer) selectCandidates(region *core.RegionInfo, oldFit *plac
 	for _, filterFunc := range context.filterFuncs {
 		filters = append(filters, filterFunc())
 	}
-	filters = append(filters, scoreGuard)
+	if !sourceIsWitness {
+		filters = append(filters, scoreGuard)
+	} else {
+		witnessGuard := filter.NewPlacementWitnessSafeguard(r.name, r.cluster.GetOpts(), r.cluster.GetBasicCluster(), r.cluster.GetRuleManager(), region, sourceStore, oldFit)
+		filters = append(filters, witnessGuard)
+	}
 	stores := r.cluster.GetStores()
 	candidates := make([]uint64, 0)
 	maxStoreTotalCount := uint64(0)
