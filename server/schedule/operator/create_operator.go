@@ -229,6 +229,7 @@ func CreateScatterRegionOperator(desc string, ci ClusterInformer, origin *core.R
 	if targetLeader != 0 {
 		leader = targetLeader
 	}
+	log.Error("in CreateScatterRegionOperator", zap.Uint64("region", origin.GetID()), zap.Uint64("leader", leader))
 	return NewBuilder(desc, ci, origin).
 		SetPeers(targetPeers).
 		SetLeader(leader).
