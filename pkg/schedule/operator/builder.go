@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/metapb"
+	"github.com/pingcap/log"
 	"github.com/tikv/pd/pkg/core"
 	"github.com/tikv/pd/pkg/id"
 	"github.com/tikv/pd/pkg/schedule/config"
@@ -619,6 +620,7 @@ func (b *Builder) buildStepsWithJointConsensus(kind OpKind) (OpKind, error) {
 	}
 
 	if targetLeaderBefore, ok := b.originPeers[b.targetLeaderStoreID]; ok && !core.IsLearner(targetLeaderBefore) && !core.IsWitness(targetLeaderBefore) {
+		log.Error("transfer leader before change")
 		// target leader is a voter in `originPeers`, transfer leader first.
 		if b.originLeaderStoreID != b.targetLeaderStoreID {
 			b.execTransferLeader(b.targetLeaderStoreID, b.targetLeaderStoreIDs)
@@ -628,6 +630,7 @@ func (b *Builder) buildStepsWithJointConsensus(kind OpKind) (OpKind, error) {
 		b.execBatchSwitchWitnesses(&kind)
 	} else if originLeaderAfter, ok := b.targetPeers[b.originLeaderStoreID]; b.originLeaderStoreID == 0 ||
 		(ok && (!core.IsLearner(originLeaderAfter) || b.isWitnessPromoteToVoter(originLeaderAfter))) {
+		log.Error("transfer leader after change")
 		// origin leader is none or a voter in `targetPeers`, change peers first.
 		b.execChangePeerV2(true, false)
 		b.execBatchSwitchWitnesses(&kind)
@@ -637,6 +640,7 @@ func (b *Builder) buildStepsWithJointConsensus(kind OpKind) (OpKind, error) {
 		}
 	} else {
 		// both demote origin leader and promote target leader, transfer leader in joint state.
+		log.Error("transfer leader in conf change")
 		b.execChangePeerV2(true, true)
 		kind |= OpLeader
 		b.execBatchSwitchWitnesses(&kind)
@@ -850,6 +854,7 @@ func (b *Builder) execChangePeerV2(needEnter bool, needTransferLeader bool) {
 
 	// Transfer Leader
 	if needTransferLeader && b.originLeaderStoreID != b.targetLeaderStoreID {
+		log.Error("transfer leader in both demote")
 		b.execTransferLeader(b.targetLeaderStoreID, b.targetLeaderStoreIDs)
 	}
 
@@ -907,10 +912,10 @@ func (b *Builder) execBatchSwitchWitnesses(kind *OpKind) {
 			*kind |= OpRegion
 			toNonWitness.next()
 
-			// promote non-witness learner to voter
+			// promote non-witness learner to voter, toPromote should be cleaned before, so only one peer need to be promoted, so no need to enter joint
 			peer.IsWitness = false
 			b.toPromote.Set(peer)
-			b.execChangePeerV2(true, false)
+			b.execChangePeerV2(false, false)
 		}
 
 		if toWitness.hasItem() {
