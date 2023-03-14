@@ -950,6 +950,10 @@ func (b *Builder) allowLeader(peer *metapb.Peer, ignoreClusterLimit bool) bool {
 		return false
 	}
 
+	if peer.GetIsWitness() {
+		return false
+	}
+
 	// store does not exist
 	if peer.GetStoreId() == b.currentLeaderStoreID {
 		return true
