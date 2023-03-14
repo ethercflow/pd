@@ -296,8 +296,10 @@ func (b *Builder) SetLeader(storeID uint64) *Builder {
 	}
 	if peer, ok := b.targetPeers[storeID]; !ok {
 		b.err = errors.Errorf("cannot transfer leader to %d: not found", storeID)
-	} else if core.IsLearner(peer) {
+	} else if core.IsLearner(peer) && !b.isWitnessPromoteToVoter(peer) {
 		b.err = errors.Errorf("cannot transfer leader to %d: not voter", storeID)
+	} else if core.IsVoter(peer) && core.IsWitness(peer) {
+		b.err = errors.Errorf("cannot transfer leader to %d: witness voter", storeID)
 	} else if _, ok := b.unhealthyPeers[storeID]; ok {
 		b.err = errors.Errorf("cannot transfer leader to %d: unhealthy", storeID)
 	} else {
@@ -314,7 +316,7 @@ func (b *Builder) SetLeaders(storeIDs []uint64) *Builder {
 	sort.Slice(storeIDs, func(i, j int) bool { return storeIDs[i] < storeIDs[j] })
 	for _, storeID := range storeIDs {
 		peer := b.targetPeers[storeID]
-		if peer == nil || core.IsLearner(peer) || b.unhealthyPeers[storeID] != nil {
+		if peer == nil || (core.IsLearner(peer) && !b.isWitnessPromoteToVoter(peer)) || (core.IsVoter(peer) && core.IsWitness(peer)) || b.unhealthyPeers[storeID] != nil {
 			continue
 		}
 		b.targetLeaderStoreIDs = append(b.targetLeaderStoreIDs, storeID)
@@ -939,10 +941,12 @@ func (b *Builder) execBatchSwitchWitnesses(kind *OpKind) {
 func (b *Builder) allowLeader(peer *metapb.Peer, ignoreClusterLimit bool) bool {
 	// these peer roles are not allowed to become leader.
 	switch peer.GetRole() {
-	case metapb.PeerRole_Learner, metapb.PeerRole_DemotingVoter:
+	case metapb.PeerRole_Learner:
 		if b.isWitnessPromoteToVoter(peer) {
 			return true
 		}
+		return false
+	case metapb.PeerRole_DemotingVoter:
 		return false
 	}
 
